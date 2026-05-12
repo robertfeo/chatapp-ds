@@ -99,7 +99,7 @@ Everyone reviews PRs in their area. The demo dry run is a whole-team activity.
 
 ### Samet Yilmaz — Docs, Diagrams & Demo Lead
 
-You own two of the graded artifacts: the **Project Report Form** and the **live demo**. Together that's a large fraction of the project grade. Your work is not auxiliary — it's the visible face of everything the team builds.
+You own two of the graded artifacts: the **Project Report Form** and the **live demo**.
 
 #### Responsibilities
 - Owns the architecture diagram from first sketch to the version embedded in the report and the slides.
@@ -271,7 +271,7 @@ Alle reviewen PRs in ihrem Bereich. Die Demo-Generalprobe ist eine Aufgabe für 
 
 ### Samet Yilmaz — Dokumentations-, Diagramm- und Demo-Verantwortlicher
 
-Du bist verantwortlich für zwei der bewerteten Artefakte: die **Project Report Form** und die **Live-Demo**. Zusammen ergibt das einen großen Teil der Projektnote. Deine Arbeit ist nicht „Nebenarbeit" — sie ist das sichtbare Gesicht von allem, was das Team baut.
+Du bist verantwortlich für zwei der bewerteten Artefakte: die **Project Report Form** und die **Live-Demo**.
 
 #### Aufgaben
 - Verantwortlich für das Architekturdiagramm vom ersten Entwurf bis zur Version, die im Bericht und in den Folien eingebettet ist.
