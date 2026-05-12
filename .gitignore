@@ -1,0 +1,42 @@
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+dependency-reduced-pom.xml
+.mvn/wrapper/maven-wrapper.jar
+
+# Java tooling caches
+.gradle/
+build/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs and local dev artifacts
+*.log
+logs/
+.local/
+
+# AI tooling — never commit these
+CLAUDE.md
+.claude/
+.claude*/
+.anthropic/
+.cursor/
+.aider*
+.continue/
+.codeium/
