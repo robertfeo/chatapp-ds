@@ -138,7 +138,9 @@ flowchart LR
     class BC bcast
 ```
 
-**Legend** — solid arrows = TCP, dotted arrows = UDP. Bidirectional `<-->` for chat (request + fan-out on the same socket) and heartbeats (peer-to-peer). One-way `-->` for state sync (leader pushes deltas to replicas). The PNG version rendered from `docs/architecture.puml` is the artifact embedded in the official Project Report PDF (issues #23/#22).
+![Architecture diagram](diagrams/architecture.png)
+
+**Legend** — solid arrows = TCP, dotted arrows = UDP. Bidirectional `<-->` for chat (request + fan-out on the same socket) and heartbeats (peer-to-peer). One-way `-->` for state sync (leader pushes deltas to replicas). Source: `docs/diagrams/architecture.mmd`; rendered PNG `docs/diagrams/architecture.png` is the artifact dropped into the official Project Report PDF (issues #23/#22).
 
 ## Deployment
 
