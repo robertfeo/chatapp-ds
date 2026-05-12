@@ -87,9 +87,58 @@ No middleware (no ZooKeeper, no Akka, no Spring). The above libraries are pure u
 
 ## System Architecture Diagram
 
-See `docs/architecture.png` (rendered from `docs/architecture.puml`).
-
 Components: 3 server processes (one acting as leader, two as replicas) and N clients. Arrows: clients↔leader chat over TCP, leader→replicas state sync over TCP, servers↔servers heartbeats over UDP unicast, all participants↔broadcast address for discovery over UDP broadcast.
+
+```mermaid
+flowchart LR
+    subgraph SERVERS["Server cluster (3 hosts)"]
+        L["Server A — Leader<br/>(highest ID)"]
+        R1["Server B — Replica"]
+        R2["Server C — Replica"]
+    end
+
+    subgraph CLIENTS["Clients (N)"]
+        C1["Client 1"]
+        C2["Client 2"]
+        Cn["Client N"]
+    end
+
+    BC(("UDP broadcast<br/>(discovery)"))
+
+    %% Chat fan-out: clients <-> leader over TCP
+    C1 <-->|TCP chat| L
+    C2 <-->|TCP chat| L
+    Cn <-->|TCP chat| L
+
+    %% State replication: leader -> replicas over TCP
+    L -->|TCP state sync| R1
+    L -->|TCP state sync| R2
+
+    %% Heartbeats every 2s, UDP, pairwise between servers
+    L <-.->|UDP heartbeat 2s| R1
+    L <-.->|UDP heartbeat 2s| R2
+    R1 <-.->|UDP heartbeat 2s| R2
+
+    %% Discovery: every participant uses the broadcast address
+    L -.-> BC
+    R1 -.-> BC
+    R2 -.-> BC
+    C1 -.-> BC
+    C2 -.-> BC
+    Cn -.-> BC
+
+    classDef leader fill:#fde68a,stroke:#92400e,stroke-width:2px,color:#000;
+    classDef replica fill:#dbeafe,stroke:#1e40af,color:#000;
+    classDef client fill:#dcfce7,stroke:#166534,color:#000;
+    classDef bcast fill:#fee2e2,stroke:#991b1b,color:#000;
+
+    class L leader
+    class R1,R2 replica
+    class C1,C2,Cn client
+    class BC bcast
+```
+
+**Legend** — solid arrows = TCP, dotted arrows = UDP. Bidirectional `<-->` for chat (request + fan-out on the same socket) and heartbeats (peer-to-peer). One-way `-->` for state sync (leader pushes deltas to replicas). The PNG version rendered from `docs/architecture.puml` is the artifact embedded in the official Project Report PDF (issues #23/#22).
 
 ## Deployment
 
