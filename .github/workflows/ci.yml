@@ -1,0 +1,26 @@
+name: CI
+
+# Catch lint and test regressions on every push and on every PR to main.
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # `verify` runs Surefire (JUnit) and the Spotless check in one shot.
+      # A formatting violation or a failing test fails the build.
+      - name: Build, format-check and test
+        run: mvn -B verify

@@ -105,6 +105,16 @@
             <importOrder/>
           </java>
         </configuration>
+        <executions>
+          <!-- Fail `mvn verify` (and CI) on any Google Java Format violation. -->
+          <execution>
+            <id>spotless-check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
