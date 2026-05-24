@@ -1,7 +1,7 @@
 # chatapp-ds developer entry points. Thin wrappers around Maven so every team
 # member runs the same commands regardless of IDE.
 
-.PHONY: install lint format test package dev stop
+.PHONY: install lint format test package dev stop status
 
 # Build and install to the local repo without running tests.
 install:
@@ -23,10 +23,15 @@ test:
 package:
 	mvn package
 
-# Spin up 3 servers + 2 clients on localhost. Wired up in #2 (local dev runner).
+# Spin up 3 servers + 2 clients on localhost (background JVMs, logs in target/dev/).
+# Override counts/ports with env vars, e.g. SERVERS=3 CLIENTS=2 make dev.
 dev:
-	@echo "dev runner not implemented yet (see issue #2)"
+	@bash scripts/dev.sh up
 
-# Tear down everything started by 'make dev'. Wired up in #2.
+# Tear down everything started by 'make dev', leaving no orphan processes.
 stop:
-	@echo "stop not implemented yet (see issue #2)"
+	@bash scripts/dev.sh down
+
+# Show which dev processes are alive.
+status:
+	@bash scripts/dev.sh status
