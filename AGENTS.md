@@ -40,12 +40,16 @@ The project is Java 21 + Maven. Common commands (also wrapped in the `Makefile`)
 | Compile + install, skip tests | `mvn -DskipTests install` | `make install` |
 | Format check (Google Java Format) | `mvn spotless:check` | `make lint` |
 | Auto-format | `mvn spotless:apply` | `make format` |
-| Run unit tests | `mvn test` | `make test` |
-| Format-check **and** test (what CI runs) | `mvn -B verify` | n/a |
+| Unit tests only (Surefire, `*Test`) | `mvn test` | `make test` |
+| Format + unit + integration tests (the full gate) | `mvn -B verify` | n/a |
 | Shaded fat-jar at `target/chatapp.jar` | `mvn package` | `make package` |
 
 Always run `mvn -B verify` locally before opening a PR. If Spotless complains,
 run `mvn spotless:apply` and commit the result.
+
+CI runs the same chain as ordered stages (format check, then build the
+fat-jar, then unit tests, then integration tests), so a failure points at the
+exact stage. `mvn -B verify` reproduces all of it locally in one pass.
 
 ---
 
@@ -83,6 +87,11 @@ dependency merges.
 
 Tests are not optional and they are not an afterthought.
 
+**Naming decides where a test runs.** Name unit tests `*Test` (Surefire runs
+them in the fast unit stage). Name integration tests `*IT` (Failsafe runs them
+in the integration stage, after the fat-jar is built). Getting this wrong makes
+a JVM-spawning integration test run in the fast stage with no jar present.
+
 - **Every feature issue** adds at least one test under
   `src/test/java/com/chatapp/...`, placed next to the area it covers
   (`protocol`, `discovery`, `election`, `heartbeat`, ...).
@@ -91,9 +100,9 @@ Tests are not optional and they are not an afterthought.
   `@MethodSource` for table-driven cases.
 - Protocol code gets **encode/decode round-trip** tests plus a
   **malformed-input** test (a bad message must never crash the receive loop).
-- Network and failover behaviour gets an **integration test** that spawns real
-  JVMs via `ProcessBuilder` and asserts on observable behaviour or log lines.
-  Keep these under ~30s and flake-free over repeated runs.
+- Network and failover behaviour gets an **integration test** (`*IT`) that
+  spawns real JVMs via `ProcessBuilder` and asserts on observable behaviour or
+  log lines. Keep these under ~30s and flake-free over repeated runs.
 - An "efficient test" means it asserts the behaviour the issue promises and
   runs quickly in CI. A test that always passes regardless of the code is not a
   test.
