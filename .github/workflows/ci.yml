@@ -6,8 +6,16 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+# A newer push to the same ref cancels an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
@@ -20,7 +28,32 @@ jobs:
           java-version: "21"
           cache: maven
 
-      # `verify` runs Surefire (JUnit) and the Spotless check in one shot.
-      # A formatting violation or a failing test fails the build.
-      - name: Build, format-check and test
-        run: mvn -B verify
+      # Stage 1 - fail fast on formatting before spending time compiling.
+      - name: Format check (Spotless)
+        run: mvn -B spotless:check
+
+      # Stage 2 - compile and build the shaded fat-jar the integration
+      # tests later execute. Tests are skipped here on purpose.
+      - name: Build (compile + fat-jar)
+        run: mvn -B -DskipTests package
+
+      # Stage 3 - fast, deterministic unit tests (Surefire, *Test).
+      - name: Unit tests
+        run: mvn -B surefire:test
+
+      # Stage 4 - integration tests (Failsafe, *IT) that spawn real
+      # server/client JVMs from the fat-jar built in stage 2.
+      - name: Integration tests
+        timeout-minutes: 10
+        run: mvn -B failsafe:integration-test failsafe:verify
+
+      # Always publish reports so a failing stage is easy to diagnose.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          if-no-files-found: ignore
