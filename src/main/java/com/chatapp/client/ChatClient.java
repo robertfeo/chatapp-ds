@@ -1,4 +1,4 @@
-ackage com.chatapp.client;
+package com.chatapp.client;
 
 import com.chatapp.config.Config;
 import com.chatapp.discovery.Peer;
