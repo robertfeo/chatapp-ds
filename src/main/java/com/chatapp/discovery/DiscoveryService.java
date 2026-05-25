@@ -20,6 +20,7 @@ import java.net.UnknownHostException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,7 @@ public final class DiscoveryService implements AutoCloseable {
   private final ServerConfig config;
   private final GroupView groupView;
   private final Supplier<Integer> currentLeaderId;
+  private final Consumer<Message> extraHandler;
   private final String advertisedHost;
 
   private volatile DatagramSocket socket;
@@ -50,9 +52,18 @@ public final class DiscoveryService implements AutoCloseable {
 
   public DiscoveryService(
       ServerConfig config, GroupView groupView, Supplier<Integer> currentLeaderId) {
+    this(config, groupView, currentLeaderId, msg -> {});
+  }
+
+  public DiscoveryService(
+      ServerConfig config,
+      GroupView groupView,
+      Supplier<Integer> currentLeaderId,
+      Consumer<Message> extraHandler) {
     this.config = config;
     this.groupView = groupView;
     this.currentLeaderId = currentLeaderId;
+    this.extraHandler = extraHandler;
     this.advertisedHost = advertisedHost(config);
   }
 
@@ -149,9 +160,7 @@ public final class DiscoveryService implements AutoCloseable {
     switch (message) {
       case DiscoveryHello hello -> onHello(hello, packet);
       case DiscoveryReply reply -> onReply(reply, packet);
-      default -> {
-        // Other message types (heartbeats, etc.) are not discovery's concern.
-      }
+      default -> extraHandler.accept(message);
     }
   }
 
@@ -196,7 +205,7 @@ public final class DiscoveryService implements AutoCloseable {
     }
   }
 
-  private void send(Message message, SocketAddress destination) throws IOException {
+  public void send(Message message, SocketAddress destination) throws IOException {
     try {
       byte[] bytes = Codec.encode(message);
       socket.send(new DatagramPacket(bytes, bytes.length, destination));

@@ -23,8 +23,9 @@
     <junit.version>5.11.4</junit.version>
 
     <!-- Plugin versions -->
+    <resources.plugin.version>3.3.1</resources.plugin.version>
     <compiler.plugin.version>3.13.0</compiler.plugin.version>
-    <surefire.plugin.version>3.5.2</surefire.plugin.version>
+    <surefire.plugin.version>3.2.5</surefire.plugin.version>
     <shade.plugin.version>3.6.0</shade.plugin.version>
     <spotless.plugin.version>2.43.0</spotless.plugin.version>
   </properties>
@@ -60,6 +61,12 @@
     <finalName>chatapp</finalName>
 
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>${resources.plugin.version}</version>
+      </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>

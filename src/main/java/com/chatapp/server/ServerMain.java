@@ -6,8 +6,13 @@ import com.chatapp.config.ServerConfig;
 import com.chatapp.discovery.DiscoveryService;
 import com.chatapp.discovery.GroupView;
 import com.chatapp.discovery.Peer;
+import com.chatapp.election.ElectionService;
+import com.chatapp.heartbeat.HeartbeatService;
+import com.chatapp.protocol.Message;
 import java.net.SocketException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -15,9 +20,8 @@ import org.slf4j.MDC;
 /**
  * Entry point for a server process: {@code java -jar chatapp.jar server}.
  *
- * <p>It loads and validates configuration, prints a startup banner, starts UDP-broadcast discovery,
- * and parks so the process behaves like a long-running server you stop with Ctrl+C. Heartbeats,
- * election and the chat path are wired in across the remaining M1/M2 issues.
+ * <p>Loads and validates configuration, starts UDP discovery, heartbeat, and leader election, then
+ * parks until Ctrl+C / SIGTERM.
  */
 public final class ServerMain {
 
@@ -30,7 +34,6 @@ public final class ServerMain {
     try {
       config = ServerConfig.fromEnv();
     } catch (ConfigException e) {
-      // Fail fast with a clear message on stderr; do not start a half-configured server.
       System.err.println("server startup failed: " + e.getMessage());
       System.exit(2);
       return;
@@ -48,12 +51,52 @@ public final class ServerMain {
         Config.HEARTBEAT_INTERVAL_S,
         Config.PEER_DEAD_TIMEOUT_S);
 
-    // Build the group view, seed it with ourselves, and start discovery.
     GroupView groupView = new GroupView();
     groupView.upsert(new Peer(config.serverId(), config.listenHost(), config.listenPort()));
 
-    // Leader election lands in #10; until then the leader is unknown.
-    DiscoveryService discovery = new DiscoveryService(config, groupView, () -> null);
+    // -1 means no leader is known yet; a valid server ID is always > 0.
+    AtomicInteger currentLeaderId = new AtomicInteger(-1);
+
+    // AtomicReferences break the circular dependency: DiscoveryService dispatches to
+    // HeartbeatService and ElectionService, which in turn send via DiscoveryService.send().
+    // The refs are set before discovery.start(), so no message can arrive before they are ready.
+    AtomicReference<ElectionService> electionRef = new AtomicReference<>();
+    AtomicReference<HeartbeatService> heartbeatRef = new AtomicReference<>();
+
+    DiscoveryService discovery =
+        new DiscoveryService(
+            config,
+            groupView,
+            () -> {
+              int id = currentLeaderId.get();
+              return id == -1 ? null : id;
+            },
+            msg -> {
+              switch (msg) {
+                case Message.Heartbeat hb -> heartbeatRef.get().onHeartbeatReceived(hb);
+                case Message.ElectionVote v -> electionRef.get().onVoteReceived(v);
+                case Message.IAmLeader leader -> electionRef.get().onLeaderAnnounced(leader);
+                default -> {}
+              }
+            });
+
+    ElectionService election =
+        new ElectionService(config, groupView, discovery::send, currentLeaderId);
+
+    HeartbeatService heartbeat =
+        new HeartbeatService(
+            config,
+            groupView,
+            discovery::send,
+            deadPeerId -> {
+              if (deadPeerId == currentLeaderId.get()) {
+                election.triggerElection();
+              }
+            });
+
+    electionRef.set(election);
+    heartbeatRef.set(heartbeat);
+
     try {
       discovery.start();
     } catch (SocketException e) {
@@ -63,22 +106,23 @@ public final class ServerMain {
       return;
     }
 
+    heartbeat.start();
+
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
                 () -> {
+                  heartbeat.close();
+                  election.close();
                   discovery.close();
                   log.info("event=shutdown serverId={}", config.serverId());
                 }));
 
-    log.info(
-        "event=ready serverId={} note=\"heartbeat, election and chat land in later issues\"",
-        config.serverId());
+    log.info("event=ready serverId={}", config.serverId());
 
     park();
   }
 
-  /** Block the main thread until the JVM is asked to stop (Ctrl+C / SIGTERM runs the hook). */
   private static void park() {
     try {
       new CountDownLatch(1).await();
