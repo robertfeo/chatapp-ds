@@ -1,4 +1,4 @@
-package com.chatapp.client;
+ackage com.chatapp.client;
 
 import com.chatapp.config.Config;
 import java.util.concurrent.ThreadLocalRandom;

@@ -37,7 +37,6 @@ class ClientDiscoveryTest {
 
   @Test
   void prefersReplyWhereServerIsItsOwnLeader() {
-    // All three servers reply; server 3 identifies itself as leader.
     Map<Integer, DiscoveryReply> replies =
         Map.of(
             1, reply(1, "10.0.0.1", 6001, 3),
@@ -64,10 +63,8 @@ class ClientDiscoveryTest {
 
   @Test
   void fallbackPicksAddressFromFollowerReportWhenLeaderHasStaleLeaderId() {
-    // During a leader transition: server 1 (follower) knows new leader is server 5.
-    // Server 5 is up and replies, but its cached leaderId still points to old leader 3.
-    // First-preference loop: senderId=1 != leaderId=5; senderId=5 != leaderId=3. No match.
-    // Fallback: reply(1, leaderId=5) -> containsKey(5)=true -> return server 5's address.
+    // Server 1 (follower) reports new leader=5. Server 5 replies but still points to old leader 3.
+    // First loop: 1!=5, 5!=3 -> no match. Fallback: reply(1,leaderId=5), key 5 exists -> server 5.
     Map<Integer, DiscoveryReply> replies =
         Map.of(
             1, reply(1, "10.0.0.1", 6001, 5),
@@ -83,7 +80,6 @@ class ClientDiscoveryTest {
   @Test
   void stopSignalDoesNotThrow() {
     ChatClient client = new ChatClient("tester", 99, 4500, "255.255.255.255");
-    // stop() must be idempotent and not throw.
     client.stop();
     client.stop();
   }
