@@ -1,5 +1,6 @@
 package com.chatapp;
 
+import com.chatapp.client.ClientMain;
 import com.chatapp.server.ServerMain;
 import java.util.Arrays;
 
@@ -24,11 +25,7 @@ public final class Main {
     String[] rest = Arrays.copyOfRange(args, 1, args.length);
     switch (args[0]) {
       case "server" -> ServerMain.main(rest);
-      case "client" -> {
-        // The client entry point is implemented in #7 (Ayham). Wire it up here then.
-        System.err.println("client is not implemented yet (issue #7)");
-        System.exit(2);
-      }
+      case "client" -> ClientMain.main(rest);
       default -> {
         usage();
         System.exit(2);
