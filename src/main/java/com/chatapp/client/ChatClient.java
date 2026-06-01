@@ -8,6 +8,7 @@ import com.chatapp.protocol.Message;
 import com.chatapp.protocol.Message.Chat;
 import com.chatapp.protocol.Message.DiscoveryHello;
 import com.chatapp.protocol.Message.DiscoveryReply;
+import com.chatapp.protocol.Message.IAmLeader;
 import com.chatapp.protocol.Message.SenderRole;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -20,26 +21,33 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Minimal chat client.
+ * Reconnecting chat client.
  *
- * <p>On startup: broadcasts a {@link DiscoveryHello}, waits for {@link DiscoveryReply} responses,
- * picks the current leader, opens a TCP connection and forwards user input as {@link Chat} messages
- * while printing incoming {@link Chat} messages from the server.
+ * <p>Lifecycle:
  *
- * <p>Exits cleanly when stdin closes (EOF / Ctrl+C) or {@link #stop()} is called.
+ * <ol>
+ *   <li>Broadcast a {@link DiscoveryHello} via UDP and collect {@link DiscoveryReply} responses to
+ *       find the current leader's TCP address.
+ *   <li>Connect to the leader and drain any messages buffered during the previous disconnect.
+ *   <li>Run two concurrent loops: one reading server messages (handling {@link IAmLeader}
+ *       notifications), one reading stdin.
+ *   <li>On TCP drop or {@link IAmLeader} receipt, break out and repeat from step 1 — within ~6 s in
+ *       the normal case (one heartbeat timeout).
+ * </ol>
  */
 public final class ChatClient {
 
   private static final Logger log = LoggerFactory.getLogger(ChatClient.class);
-  static final int DISCOVERY_TIMEOUT_MS = 3_000;
+  private static final int DISCOVERY_TIMEOUT_MS = 3_000;
   private static final int MAX_DATAGRAM = 8192;
 
   private final String name;
@@ -47,6 +55,7 @@ public final class ChatClient {
   private final int discoveryPort;
   private final String broadcastAddr;
 
+  private final Queue<String> pendingMessages = new ConcurrentLinkedQueue<>();
   private final AtomicBoolean running = new AtomicBoolean(true);
 
   public ChatClient(String name, int clientId, int discoveryPort, String broadcastAddr) {
@@ -56,20 +65,29 @@ public final class ChatClient {
     this.broadcastAddr = broadcastAddr;
   }
 
-  /** Start the client. Blocks until stdin closes or {@link #stop()} is called. */
+  /**
+   * Start the client. Blocks until the user closes stdin or {@link #stop()} is called.
+   * Automatically re-discovers and reconnects on leader failure.
+   */
   public void start() {
-    System.out.println("[chatapp] Connecting as \"" + name + "\" ...");
+    System.out.println("[chatapp] Connecting as \"" + name + "\" …");
 
     try (BufferedReader stdin =
         new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
 
-      Peer leader = discoverLeader();
-      if (leader == null) {
-        System.err.println("[chatapp] No leader found. Is a server running?");
-        return;
+      while (running.get()) {
+        Peer leader = discoverLeader();
+        if (leader == null) {
+          System.err.println("[chatapp] No leader found, retrying in 2 s…");
+          sleep(2_000);
+          continue;
+        }
+        System.out.println("[chatapp] Connected to leader=" + leader.id());
+        connectAndRun(leader, stdin);
+        if (running.get()) {
+          System.err.println("[chatapp] Connection lost, rediscovering…");
+        }
       }
-      System.out.println("[chatapp] Connected to leader=" + leader.id());
-      connectAndRun(leader, stdin);
     } catch (IOException e) {
       log.error("event=stdin_error error={}", e.toString());
     }
@@ -80,8 +98,31 @@ public final class ChatClient {
     running.set(false);
   }
 
+  /**
+   * Add a message to the pending buffer. Called when the user types while disconnected (for testing
+   * purposes; in production the send loop buffers directly).
+   */
+  public void bufferMessage(String text) {
+    pendingMessages.offer(text);
+  }
+
+  /** Return and remove all pending buffered messages in insertion order. */
+  public Queue<String> drainPendingMessages() {
+    Queue<String> drained = new ConcurrentLinkedQueue<>();
+    String msg;
+    while ((msg = pendingMessages.poll()) != null) {
+      drained.offer(msg);
+    }
+    return drained;
+  }
+
+  /** The number of messages currently buffered (for testing). */
+  public int pendingCount() {
+    return pendingMessages.size();
+  }
+
   // -------------------------------------------------------------------------
-  // Discovery
+  // Internal implementation
   // -------------------------------------------------------------------------
 
   private Peer discoverLeader() {
@@ -108,7 +149,7 @@ public final class ChatClient {
           byte[] buf = new byte[MAX_DATAGRAM];
           DatagramPacket packet = new DatagramPacket(buf, buf.length);
           socket.receive(packet);
-          Message msg = Codec.decode(Arrays.copyOf(packet.getData(), packet.getLength()));
+          Message msg = Codec.decode(java.util.Arrays.copyOf(packet.getData(), packet.getLength()));
           if (msg instanceof DiscoveryReply reply && reply.leaderId() != null) {
             replies.put(reply.senderId(), reply);
           }
@@ -137,11 +178,13 @@ public final class ChatClient {
    * <p>Package-private for unit testing.
    */
   static Peer selectLeader(Map<Integer, DiscoveryReply> replies) {
+    // Find the reply from the leader itself.
     for (DiscoveryReply reply : replies.values()) {
       if (reply.leaderId() != null && reply.senderId() == reply.leaderId()) {
         return new Peer(reply.senderId(), reply.host(), reply.port());
       }
     }
+    // Fall back: use any reply's reported leaderId to find the leader address.
     for (DiscoveryReply reply : replies.values()) {
       if (reply.leaderId() != null && replies.containsKey(reply.leaderId())) {
         DiscoveryReply leaderReply = replies.get(reply.leaderId());
@@ -150,10 +193,6 @@ public final class ChatClient {
     }
     return null;
   }
-
-  // -------------------------------------------------------------------------
-  // TCP session
-  // -------------------------------------------------------------------------
 
   private void connectAndRun(Peer leader, BufferedReader stdin) {
     try (Socket socket = new Socket(leader.host(), leader.port())) {
@@ -165,8 +204,16 @@ public final class ChatClient {
           new BufferedReader(
               new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 
+      // Drain buffered messages before resuming normal I/O.
+      String buffered;
+      while ((buffered = pendingMessages.poll()) != null) {
+        sendChat(out, buffered);
+        log.info("event=buffered_msg_sent text={}", buffered);
+      }
+
       AtomicBoolean sessionActive = new AtomicBoolean(true);
 
+      // Receive loop (virtual thread).
       Thread.ofVirtual()
           .name("client-rx")
           .start(
@@ -175,16 +222,25 @@ public final class ChatClient {
                   String line;
                   while ((line = in.readLine()) != null) {
                     Message msg = Codec.decode(line.getBytes(StandardCharsets.UTF_8));
-                    if (msg instanceof Chat chat) {
-                      System.out.println("[" + chat.from() + "] " + chat.text());
+                    switch (msg) {
+                      case Chat chat -> System.out.println("[" + chat.from() + "] " + chat.text());
+                      case IAmLeader iam -> {
+                        System.out.println(
+                            "[chatapp] Leader changed to " + iam.leaderId() + ", reconnecting…");
+                        sessionActive.set(false);
+                        socket.close();
+                      }
+                      default -> {}
                     }
                   }
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                  // connection dropped; sessionActive stays false after socket.close()
                 } finally {
                   sessionActive.set(false);
                 }
               });
 
+      // Send loop (current thread).
       while (sessionActive.get() && running.get()) {
         if (stdin.ready()) {
           String text = stdin.readLine();
@@ -192,7 +248,11 @@ public final class ChatClient {
             running.set(false);
             break;
           }
-          sendChat(out, text);
+          if (sessionActive.get()) {
+            sendChat(out, text);
+          } else {
+            pendingMessages.offer(text);
+          }
         } else {
           sleep(50);
         }

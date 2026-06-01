@@ -9,10 +9,10 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>Environment variables:
  *
  * <ul>
- *   <li>{@code CLIENT_NAME} - display name shown in chat (default: {@code "anon"})
- *   <li>{@code DISCOVERY_PORT} - UDP port shared with servers (default: {@value
+ *   <li>{@code CLIENT_NAME} – display name shown in chat (default: {@code "anon"})
+ *   <li>{@code DISCOVERY_PORT} – UDP port shared with servers (default: {@value
  *       Config#DEFAULT_DISCOVERY_PORT})
- *   <li>{@code BROADCAST_ADDR} - subnet broadcast address (default: {@value
+ *   <li>{@code BROADCAST_ADDR} – subnet broadcast address (default: {@value
  *       Config#DEFAULT_BROADCAST_ADDR})
  * </ul>
  */
@@ -25,6 +25,7 @@ public final class ClientMain {
     int discoveryPort = ChatClient.resolveDiscoveryPort();
     String broadcastAddr = envOrDefault("BROADCAST_ADDR", Config.DEFAULT_BROADCAST_ADDR);
 
+    // Ephemeral client id: random so multiple clients on the same host don't collide.
     int clientId = ThreadLocalRandom.current().nextInt(1_000_000, Integer.MAX_VALUE);
 
     ChatClient client = new ChatClient(name, clientId, discoveryPort, broadcastAddr);
