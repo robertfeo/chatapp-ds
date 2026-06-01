@@ -10,16 +10,17 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Accepts TCP connections from clients on {@code config.listenPort()}.
+ * Accepts TCP connections from clients <em>and</em> replicas on {@code config.listenPort()}.
  *
- * <p>Each connection is served by a virtual thread. On leader change, the server pushes an {@link
- * IAmLeader} notification to every currently-connected client so they can re-route without waiting
- * for their TCP connection to drop.
+ * <p>Sessions are classified on the first received message: {@link SenderRole#SERVER} messages come
+ * from replicas (server-to-server sync); {@link SenderRole#CLIENT} messages come from chat clients.
+ * Each group is tracked in a separate set so the caller can broadcast to one or both groups
+ * independently.
  */
 public final class TcpServer implements AutoCloseable {
 
@@ -27,20 +28,20 @@ public final class TcpServer implements AutoCloseable {
 
   private final int myId;
   private final int listenPort;
-  private final Consumer<Message> incomingMessageHandler;
+
+  /** Called for every message received, together with the session it arrived on. */
+  private final BiConsumer<Message, ClientSession> messageHandler;
 
   private volatile ServerSocket serverSocket;
   private volatile boolean running;
-  private final Set<ClientSession> sessions = ConcurrentHashMap.newKeySet();
 
-  /**
-   * @param incomingMessageHandler called for every message received from any connected client; used
-   *     by the chat layer (Issue #12) to dispatch incoming messages.
-   */
-  public TcpServer(ServerConfig config, Consumer<Message> incomingMessageHandler) {
+  private final Set<ClientSession> clientSessions = ConcurrentHashMap.newKeySet();
+  private final Set<ClientSession> replicaSessions = ConcurrentHashMap.newKeySet();
+
+  public TcpServer(ServerConfig config, BiConsumer<Message, ClientSession> messageHandler) {
     this.myId = config.serverId();
     this.listenPort = config.listenPort();
-    this.incomingMessageHandler = incomingMessageHandler;
+    this.messageHandler = messageHandler;
   }
 
   /** Bind the server socket and start the accept loop in a virtual thread. */
@@ -51,23 +52,30 @@ public final class TcpServer implements AutoCloseable {
     log.info("event=tcp_server_started myId={} port={}", myId, listenPort);
   }
 
-  /**
-   * Push an {@link IAmLeader} notification to every connected client. Called both when this server
-   * wins an election and when it receives an {@link IAmLeader} from a peer (so clients connected to
-   * any server are kept in sync).
-   */
+  /** Send an {@link IAmLeader} notification to all connected clients and replicas. */
   public void notifyLeaderChange(int newLeaderId) {
     IAmLeader msg = new IAmLeader(myId, SenderRole.SERVER, System.currentTimeMillis(), newLeaderId);
-    int count = 0;
-    for (ClientSession s : sessions) {
-      if (s.isOpen()) {
-        s.send(msg);
-        count++;
-      }
+    broadcastToClients(msg);
+    broadcastToReplicas(msg);
+    log.info(
+        "event=leader_change_broadcast myId={} newLeaderId={} clients={} replicas={}",
+        myId,
+        newLeaderId,
+        clientSessions.size(),
+        replicaSessions.size());
+  }
+
+  /** Send {@code msg} to every connected chat client. */
+  public void broadcastToClients(Message msg) {
+    for (ClientSession s : clientSessions) {
+      if (s.isOpen()) s.send(msg);
     }
-    if (count > 0) {
-      log.info(
-          "event=clients_notified myId={} newLeaderId={} clientCount={}", myId, newLeaderId, count);
+  }
+
+  /** Send {@code msg} to every connected replica. */
+  public void broadcastToReplicas(Message msg) {
+    for (ClientSession s : replicaSessions) {
+      if (s.isOpen()) s.send(msg);
     }
   }
 
@@ -77,7 +85,7 @@ public final class TcpServer implements AutoCloseable {
       try {
         socket = serverSocket.accept();
       } catch (SocketException e) {
-        return; // closed during shutdown
+        return;
       } catch (IOException e) {
         if (running) {
           log.warn("event=accept_failed myId={} error={}", myId, e.toString());
@@ -97,50 +105,62 @@ public final class TcpServer implements AutoCloseable {
         continue;
       }
 
-      sessions.add(session);
-      log.info(
-          "event=client_connected myId={} remote={} totalClients={}",
-          myId,
-          session.remoteAddress(),
-          sessions.size());
+      log.info("event=connection_accepted myId={} remote={}", myId, session.remoteAddress());
       Thread.ofVirtual()
-          .name("tcp-client-" + session.remoteAddress())
-          .start(() -> serveClient(session));
+          .name("tcp-session-" + session.remoteAddress())
+          .start(() -> serveSession(session));
     }
   }
 
-  private void serveClient(ClientSession session) {
+  private void serveSession(ClientSession session) {
+    boolean classified = false;
     try {
       while (session.isOpen()) {
         Message msg = session.receive();
-        if (msg == null) break; // client disconnected
-        incomingMessageHandler.accept(msg);
+        if (msg == null) break;
+
+        if (!classified) {
+          classified = true;
+          if (msg.senderRole() == SenderRole.SERVER) {
+            replicaSessions.add(session);
+            log.info(
+                "event=replica_connected myId={} remote={} totalReplicas={}",
+                myId,
+                session.remoteAddress(),
+                replicaSessions.size());
+          } else {
+            clientSessions.add(session);
+            log.info(
+                "event=client_connected myId={} remote={} totalClients={}",
+                myId,
+                session.remoteAddress(),
+                clientSessions.size());
+          }
+        }
+
+        messageHandler.accept(msg, session);
       }
     } catch (Exception e) {
       if (session.isOpen()) {
         log.debug(
-            "event=client_read_error myId={} remote={} error={}",
+            "event=session_read_error myId={} remote={} error={}",
             myId,
             session.remoteAddress(),
             e.toString());
       }
     } finally {
-      sessions.remove(session);
+      clientSessions.remove(session);
+      replicaSessions.remove(session);
       session.close();
-      log.info(
-          "event=client_disconnected myId={} remote={} totalClients={}",
-          myId,
-          session.remoteAddress(),
-          sessions.size());
+      log.info("event=session_closed myId={} remote={}", myId, session.remoteAddress());
     }
   }
 
   @Override
   public void close() {
     running = false;
-    for (ClientSession s : sessions) {
-      s.close();
-    }
+    for (ClientSession s : clientSessions) s.close();
+    for (ClientSession s : replicaSessions) s.close();
     if (serverSocket != null) {
       try {
         serverSocket.close();

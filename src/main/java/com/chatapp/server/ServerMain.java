@@ -9,8 +9,15 @@ import com.chatapp.discovery.Peer;
 import com.chatapp.election.ElectionService;
 import com.chatapp.heartbeat.HeartbeatService;
 import com.chatapp.protocol.Message;
+import com.chatapp.protocol.Message.Chat;
+import com.chatapp.protocol.Message.ChatEntry;
+import com.chatapp.protocol.Message.HistoryRequest;
+import com.chatapp.protocol.Message.HistorySnapshot;
+import com.chatapp.protocol.Message.SenderRole;
+import com.chatapp.protocol.Message.StateSync;
 import java.io.IOException;
 import java.net.SocketException;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -21,8 +28,9 @@ import org.slf4j.MDC;
 /**
  * Entry point for a server process: {@code java -jar chatapp.jar server}.
  *
- * <p>Loads and validates configuration, starts UDP discovery, heartbeat, and leader election, then
- * parks until Ctrl+C / SIGTERM.
+ * <p>Loads and validates configuration, starts UDP discovery, heartbeat, leader election, a TCP
+ * server for client and replica connections, and replica state sync, then parks until Ctrl+C /
+ * SIGTERM.
  */
 public final class ServerMain {
 
@@ -52,19 +60,20 @@ public final class ServerMain {
         Config.HEARTBEAT_INTERVAL_S,
         Config.PEER_DEAD_TIMEOUT_S);
 
+    int myId = config.serverId();
     GroupView groupView = new GroupView();
-    groupView.upsert(new Peer(config.serverId(), config.listenHost(), config.listenPort()));
+    groupView.upsert(new Peer(myId, config.listenHost(), config.listenPort()));
 
-    // -1 means no leader is known yet; a valid server ID is always > 0.
     AtomicInteger currentLeaderId = new AtomicInteger(-1);
+    ChatHistory chatHistory = new ChatHistory();
 
-    // AtomicReferences break the circular dependency: DiscoveryService dispatches to
-    // HeartbeatService and ElectionService, which in turn send via DiscoveryService.send().
-    // The refs are set before discovery.start(), so no message can arrive before they are ready.
+    // AtomicReferences break circular construction dependencies.
     AtomicReference<ElectionService> electionRef = new AtomicReference<>();
     AtomicReference<HeartbeatService> heartbeatRef = new AtomicReference<>();
     AtomicReference<TcpServer> tcpServerRef = new AtomicReference<>();
+    AtomicReference<ReplicaConnector> replicaConnRef = new AtomicReference<>();
 
+    // UDP layer: discovery handles non-discovery datagrams via extraHandler.
     DiscoveryService discovery =
         new DiscoveryService(
             config,
@@ -82,18 +91,67 @@ public final class ServerMain {
               }
             });
 
+    // TCP layer: one port serves both chat clients (CLIENT role) and replicas (SERVER role).
     TcpServer tcpServer =
         new TcpServer(
             config,
-            msg -> log.debug("event=client_msg_received type={}", msg.getClass().getSimpleName()));
+            (msg, session) -> {
+              switch (msg) {
+                case HistoryRequest ignored ->
+                    // Replica joining or rejoining: send the full history snapshot.
+                    session.send(
+                        new HistorySnapshot(
+                            myId,
+                            SenderRole.SERVER,
+                            System.currentTimeMillis(),
+                            chatHistory.snapshot()));
 
+                case Chat chatMsg when currentLeaderId.get() == myId -> {
+                  // Leader accepts a chat from a client.
+                  ChatEntry entry = new ChatEntry(chatMsg.from(), chatMsg.text(), chatMsg.ts());
+                  chatHistory.append(entry);
+                  // Fan the message back to all connected clients.
+                  tcpServerRef
+                      .get()
+                      .broadcastToClients(
+                          new Chat(
+                              myId,
+                              SenderRole.SERVER,
+                              System.currentTimeMillis(),
+                              chatMsg.from(),
+                              chatMsg.text()));
+                  // Push a delta to all connected replicas.
+                  tcpServerRef
+                      .get()
+                      .broadcastToReplicas(
+                          new StateSync(
+                              myId, SenderRole.SERVER, System.currentTimeMillis(), List.of(entry)));
+                  log.info(
+                      "event=chat_accepted myId={} from={} historySize={}",
+                      myId,
+                      chatMsg.from(),
+                      chatHistory.size());
+                }
+
+                default ->
+                    log.debug(
+                        "event=tcp_msg_ignored myId={} type={}",
+                        myId,
+                        msg.getClass().getSimpleName());
+              }
+            });
+
+    // When leader changes: notify TCP clients/replicas and reconnect outgoing replica link.
     ElectionService election =
         new ElectionService(
             config,
             groupView,
             discovery::send,
             currentLeaderId,
-            newLeaderId -> tcpServerRef.get().notifyLeaderChange(newLeaderId));
+            newLeaderId -> {
+              tcpServerRef.get().notifyLeaderChange(newLeaderId);
+              replicaConnRef.get().reconnect(newLeaderId);
+            });
 
     HeartbeatService heartbeat =
         new HeartbeatService(
@@ -106,9 +164,13 @@ public final class ServerMain {
               }
             });
 
+    ReplicaConnector replicaConnector =
+        new ReplicaConnector(config, groupView, currentLeaderId, chatHistory);
+
     electionRef.set(election);
     heartbeatRef.set(heartbeat);
     tcpServerRef.set(tcpServer);
+    replicaConnRef.set(replicaConnector);
 
     try {
       discovery.start();
@@ -135,14 +197,15 @@ public final class ServerMain {
         .addShutdownHook(
             new Thread(
                 () -> {
+                  replicaConnector.close();
                   heartbeat.close();
                   election.close();
                   tcpServer.close();
                   discovery.close();
-                  log.info("event=shutdown serverId={}", config.serverId());
+                  log.info("event=shutdown serverId={}", myId);
                 }));
 
-    log.info("event=ready serverId={}", config.serverId());
+    log.info("event=ready serverId={}", myId);
 
     park();
   }
