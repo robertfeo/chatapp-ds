@@ -9,6 +9,7 @@ import com.chatapp.discovery.Peer;
 import com.chatapp.election.ElectionService;
 import com.chatapp.heartbeat.HeartbeatService;
 import com.chatapp.protocol.Message;
+import java.io.IOException;
 import java.net.SocketException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -62,6 +63,7 @@ public final class ServerMain {
     // The refs are set before discovery.start(), so no message can arrive before they are ready.
     AtomicReference<ElectionService> electionRef = new AtomicReference<>();
     AtomicReference<HeartbeatService> heartbeatRef = new AtomicReference<>();
+    AtomicReference<TcpServer> tcpServerRef = new AtomicReference<>();
 
     DiscoveryService discovery =
         new DiscoveryService(
@@ -80,8 +82,18 @@ public final class ServerMain {
               }
             });
 
+    TcpServer tcpServer =
+        new TcpServer(
+            config,
+            msg -> log.debug("event=client_msg_received type={}", msg.getClass().getSimpleName()));
+
     ElectionService election =
-        new ElectionService(config, groupView, discovery::send, currentLeaderId);
+        new ElectionService(
+            config,
+            groupView,
+            discovery::send,
+            currentLeaderId,
+            newLeaderId -> tcpServerRef.get().notifyLeaderChange(newLeaderId));
 
     HeartbeatService heartbeat =
         new HeartbeatService(
@@ -96,6 +108,7 @@ public final class ServerMain {
 
     electionRef.set(election);
     heartbeatRef.set(heartbeat);
+    tcpServerRef.set(tcpServer);
 
     try {
       discovery.start();
@@ -103,6 +116,16 @@ public final class ServerMain {
       System.err.println("server startup failed: cannot bind discovery port: " + e.getMessage());
       discovery.close();
       System.exit(3);
+      return;
+    }
+
+    try {
+      tcpServer.start();
+    } catch (IOException e) {
+      System.err.println("server startup failed: cannot bind TCP port: " + e.getMessage());
+      tcpServer.close();
+      discovery.close();
+      System.exit(4);
       return;
     }
 
@@ -114,6 +137,7 @@ public final class ServerMain {
                 () -> {
                   heartbeat.close();
                   election.close();
+                  tcpServer.close();
                   discovery.close();
                   log.info("event=shutdown serverId={}", config.serverId());
                 }));

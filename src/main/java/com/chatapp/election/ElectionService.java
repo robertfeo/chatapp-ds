@@ -16,6 +16,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +36,7 @@ public final class ElectionService implements AutoCloseable {
   private final GroupView groupView;
   private final UdpSender udpSend;
   private final AtomicInteger currentLeaderId;
+  private final IntConsumer onLeaderChanged;
 
   private final AtomicBoolean electionRunning = new AtomicBoolean(false);
   private final Set<Integer> collectedCandidateIds = ConcurrentHashMap.newKeySet();
@@ -44,11 +46,21 @@ public final class ElectionService implements AutoCloseable {
 
   public ElectionService(
       ServerConfig config, GroupView groupView, UdpSender udpSend, AtomicInteger currentLeaderId) {
+    this(config, groupView, udpSend, currentLeaderId, id -> {});
+  }
+
+  public ElectionService(
+      ServerConfig config,
+      GroupView groupView,
+      UdpSender udpSend,
+      AtomicInteger currentLeaderId,
+      IntConsumer onLeaderChanged) {
     this.myId = config.serverId();
     this.discoveryPort = config.discoveryPort();
     this.groupView = groupView;
     this.udpSend = udpSend;
     this.currentLeaderId = currentLeaderId;
+    this.onLeaderChanged = onLeaderChanged;
   }
 
   /**
@@ -87,6 +99,7 @@ public final class ElectionService implements AutoCloseable {
   public void onLeaderAnnounced(IAmLeader msg) {
     currentLeaderId.set(msg.leaderId());
     electionRunning.set(false);
+    onLeaderChanged.accept(msg.leaderId());
     log.info("event=leader_accepted myId={} leaderId={}", myId, msg.leaderId());
   }
 
@@ -114,6 +127,7 @@ public final class ElectionService implements AutoCloseable {
 
       if (winnerId == myId) {
         currentLeaderId.set(myId);
+        onLeaderChanged.accept(myId);
         broadcastLeadership();
       }
       // Non-winners wait for the IAmLeader broadcast and handle it in onLeaderAnnounced().
