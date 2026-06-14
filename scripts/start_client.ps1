@@ -2,9 +2,19 @@
 # No configuration: the client discovers the leader on its own. Just runs the jar.
 #
 # Usage (PowerShell):  .\scripts\start_client.ps1
-param([string]$Jar = "chatapp.jar")
+param([string]$Jar)
 
-if (-not (Test-Path $Jar)) { Write-Error "Jar not found: $Jar (copy chatapp.jar next to this script)"; exit 1 }
+# Locate the fat jar automatically (no flags needed): use -Jar if given, otherwise
+# search the build output and the repo root relative to this script's own folder, so
+# it works no matter the current directory.
+if (-not $Jar) {
+  $Jar = @(
+    (Join-Path $PSScriptRoot '..\target\chatapp.jar'),
+    (Join-Path $PSScriptRoot '..\chatapp.jar'),
+    (Join-Path $PSScriptRoot 'chatapp.jar')
+  ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $Jar -or -not (Test-Path $Jar)) { Write-Error "Jar not found. Build it first: mvn -DskipTests package (produces target\chatapp.jar)"; exit 1 }
 
 $java = (Get-Command java -ErrorAction SilentlyContinue).Source
 if (-not $java) {
