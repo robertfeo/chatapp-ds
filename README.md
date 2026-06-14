@@ -1,6 +1,12 @@
 # chatapp-ds
 
-![CI](https://github.com/robertfeo/chatapp-ds/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/robertfeo/chatapp-ds/actions/workflows/ci.yml/badge.svg)](https://github.com/robertfeo/chatapp-ds/actions/workflows/ci.yml)
+[![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://adoptium.net/)
+![Maven](https://img.shields.io/badge/Maven-build-C71A36?logo=apachemaven&logoColor=white)
+![JUnit 5](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5&logoColor=white)
+![Jackson](https://img.shields.io/badge/Jackson-JSON-44A833)
+![SLF4J + Logback](https://img.shields.io/badge/SLF4J-Logback-1F6FEB)
+![Google Java Format](https://img.shields.io/badge/style-Google%20Java%20Format-4285F4?logo=google&logoColor=white)
 
 A distributed chat application in **Java 21**. Multiple clients join a shared
 chat room and exchange messages through a group of replicated servers
