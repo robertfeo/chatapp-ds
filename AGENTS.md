@@ -6,7 +6,7 @@ deeper project context. Follow these rules so parallel work stays consistent
 and `main` stays green.
 
 This is **Group 16**'s distributed chat application for the Distributed Systems
-course (University of Stuttgart, SS26). A short summary of the system lives in
+course (Reutlingen University, SS26). A short summary of the system lives in
 the README; the full task breakdown and who owns what is in
 [`docs/team_plan.md`](docs/team_plan.md).
 
