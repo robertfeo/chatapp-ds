@@ -16,9 +16,39 @@ clients and tolerates the crash of any single server, including the leader.
 Group 16 project for the Distributed Systems course, Reutlingen University,
 Sommersemester 2026.
 
-> **Status:** under active development. The repository skeleton and CI are in
-> place; discovery, heartbeats, election and the chat path are being built
-> across milestones M1 to M3. See the [issue board](https://github.com/robertfeo/chatapp-ds/issues).
+> **Status:** `v1.0.0` released. Discovery, UDP heartbeats, highest-ID-wins
+> election, automatic failover, the chat path and a live per-server dashboard are
+> all in place. See the
+> [latest release](https://github.com/robertfeo/chatapp-ds/releases/latest) and
+> the [issue board](https://github.com/robertfeo/chatapp-ds/issues).
+
+## Quickstart
+
+The fastest way to run a server or a client: grab the launcher for your OS. It
+checks that **Java 21+** is installed, downloads the released `chatapp.jar` next
+to itself on first run, and starts it. A Java 21 runtime is the only
+prerequisite.
+
+**Linux, macOS, Raspberry Pi:**
+
+```bash
+curl -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.sh
+chmod +x start.sh
+./start.sh server      # or: ./start.sh client
+```
+
+**Windows (PowerShell or cmd):**
+
+```bat
+curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.bat
+.\start.bat server     :: or: .\start.bat client
+```
+
+No configuration is needed: the server detects its LAN address, draws a random
+id, and uses the default ports. Run the same launcher on each host (one or more
+servers plus clients). Full usage, configuration and troubleshooting are in
+[`docs/running.md`](docs/running.md); the three-host demo script is in
+[`docs/demo_runbook.md`](docs/demo_runbook.md).
 
 ## Overview
 
