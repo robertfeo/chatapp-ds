@@ -15,6 +15,9 @@ import com.chatapp.protocol.Message.HistoryRequest;
 import com.chatapp.protocol.Message.HistorySnapshot;
 import com.chatapp.protocol.Message.SenderRole;
 import com.chatapp.protocol.Message.StateSync;
+import com.chatapp.server.dashboard.DashboardEvents;
+import com.chatapp.server.dashboard.DashboardLogRouting;
+import com.chatapp.server.dashboard.ServerDashboard;
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.List;
@@ -72,6 +75,7 @@ public final class ServerMain {
     AtomicReference<HeartbeatService> heartbeatRef = new AtomicReference<>();
     AtomicReference<TcpServer> tcpServerRef = new AtomicReference<>();
     AtomicReference<ReplicaConnector> replicaConnRef = new AtomicReference<>();
+    AtomicReference<ServerDashboard> dashboardRef = new AtomicReference<>();
 
     // UDP layer: discovery handles non-discovery datagrams via extraHandler.
     DiscoveryService discovery =
@@ -194,6 +198,33 @@ public final class ServerMain {
 
     heartbeat.start();
 
+    // Live terminal dashboard: only on an interactive TTY, and never required for the server to
+    // run. A piped/CI run (System.console() == null) or any Lanterna failure falls back to the
+    // plain stdout logging the tests and demo scripts rely on.
+    if (dashboardEnabled()) {
+      DashboardEvents events = ServerDashboard.newEventBuffer();
+      ServerDashboard dashboard =
+          new ServerDashboard(
+              myId,
+              config.listenHost(),
+              config.listenPort(),
+              config.discoveryPort(),
+              currentLeaderId,
+              groupView,
+              tcpServer::clientCount,
+              tcpServer::replicaCount,
+              chatHistory::size,
+              events);
+      try {
+        dashboard.start();
+        DashboardLogRouting.install(events, myId);
+        dashboardRef.set(dashboard);
+      } catch (Throwable t) {
+        dashboard.close();
+        log.warn("event=dashboard_unavailable reason={}", t.toString());
+      }
+    }
+
     // No prior leader exists on a cold start, so kick off a one-shot election once the group view
     // has had time to converge; the highest live id becomes the initial leader.
     election.scheduleBootstrap();
@@ -202,6 +233,11 @@ public final class ServerMain {
         .addShutdownHook(
             new Thread(
                 () -> {
+                  // Restore the terminal first so the shell is usable again right away.
+                  ServerDashboard dashboard = dashboardRef.get();
+                  if (dashboard != null) {
+                    dashboard.close();
+                  }
                   replicaConnector.close();
                   heartbeat.close();
                   election.close();
@@ -221,5 +257,24 @@ public final class ServerMain {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  /**
+   * The live dashboard runs only on an interactive terminal. It can be turned off (plain logs come
+   * back) via {@code CHATAPP_DASHBOARD=off} or {@code -Dchatapp.dashboard=off}; both are optional
+   * overrides, so a bare {@code java -jar chatapp.jar server} still just works.
+   */
+  private static boolean dashboardEnabled() {
+    String pref = System.getenv("CHATAPP_DASHBOARD");
+    if (pref == null) {
+      pref = System.getProperty("chatapp.dashboard");
+    }
+    if (pref != null
+        && (pref.equalsIgnoreCase("off")
+            || pref.equalsIgnoreCase("plain")
+            || pref.equalsIgnoreCase("false"))) {
+      return false;
+    }
+    return System.console() != null;
   }
 }

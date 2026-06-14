@@ -79,6 +79,16 @@ public final class TcpServer implements AutoCloseable {
     }
   }
 
+  /** Number of chat clients currently connected. Read by the live dashboard. */
+  public int clientCount() {
+    return clientSessions.size();
+  }
+
+  /** Number of replica servers currently connected. Read by the live dashboard. */
+  public int replicaCount() {
+    return replicaSessions.size();
+  }
+
   private void acceptLoop() {
     while (running) {
       Socket socket;
