@@ -32,8 +32,9 @@ Transport column: **UDP-B** = UDP broadcast, **UDP-U** = UDP unicast, **TCP**.
 | `DISCOVERY_HELLO` | server or client (joining) | all servers | UDP-B | `host` (string), `port` (int) |
 | `DISCOVERY_REPLY` | server | the joiner | UDP-U | `host` (string), `port` (int), `leaderId` (int, nullable) |
 | `HEARTBEAT` | server | each peer server | UDP-U | none |
-| `ELECTION_VOTE` | server | all servers | UDP-B | `candidateId` (int) |
-| `I_AM_LEADER` | new leader | all servers and clients | UDP-B | `leaderId` (int) |
+| `ELECTION` | server calling an election | all servers | UDP-B | none (Bully inquiry; the `senderId` is the candidate) |
+| `ANSWER` | higher-id server | all servers | UDP-B | none (Bully "I am alive", suppresses a lower candidate) |
+| `I_AM_LEADER` | new leader (Bully coordinator) | all servers and clients | UDP-B | `leaderId` (int) |
 | `CHAT` | client then leader | leader, then all clients | TCP | `from` (string), `text` (string) |
 | `STATE_SYNC` | leader | each replica | TCP | `messages` (list of `ChatEntry`) |
 | `HISTORY_REQUEST` | replica (re)joining | leader | TCP | none |

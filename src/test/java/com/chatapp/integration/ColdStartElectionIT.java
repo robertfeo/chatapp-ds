@@ -75,8 +75,9 @@ class ColdStartElectionIT {
             },
             msg -> {
               switch (msg) {
-                case Message.ElectionVote v -> electionRef.get().onVoteReceived(v);
-                case Message.IAmLeader leader -> electionRef.get().onLeaderAnnounced(leader);
+                case Message.ElectionInquiry e -> electionRef.get().onElectionInquiry(e);
+                case Message.Answer a -> electionRef.get().onAnswer(a);
+                case Message.IAmLeader leader -> electionRef.get().onCoordinator(leader);
                 default -> {}
               }
             });

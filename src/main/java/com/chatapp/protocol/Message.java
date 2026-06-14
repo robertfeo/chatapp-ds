@@ -26,7 +26,8 @@ import java.util.List;
   @JsonSubTypes.Type(value = Message.DiscoveryHello.class, name = "DISCOVERY_HELLO"),
   @JsonSubTypes.Type(value = Message.DiscoveryReply.class, name = "DISCOVERY_REPLY"),
   @JsonSubTypes.Type(value = Message.Heartbeat.class, name = "HEARTBEAT"),
-  @JsonSubTypes.Type(value = Message.ElectionVote.class, name = "ELECTION_VOTE"),
+  @JsonSubTypes.Type(value = Message.ElectionInquiry.class, name = "ELECTION"),
+  @JsonSubTypes.Type(value = Message.Answer.class, name = "ANSWER"),
   @JsonSubTypes.Type(value = Message.IAmLeader.class, name = "I_AM_LEADER"),
   @JsonSubTypes.Type(value = Message.Chat.class, name = "CHAT"),
   @JsonSubTypes.Type(value = Message.StateSync.class, name = "STATE_SYNC"),
@@ -37,7 +38,8 @@ public sealed interface Message
     permits Message.DiscoveryHello,
         Message.DiscoveryReply,
         Message.Heartbeat,
-        Message.ElectionVote,
+        Message.ElectionInquiry,
+        Message.Answer,
         Message.IAmLeader,
         Message.Chat,
         Message.StateSync,
@@ -79,11 +81,24 @@ public sealed interface Message
   /** Liveness ping a server unicasts to each peer every {@code HEARTBEAT_INTERVAL_S}. */
   record Heartbeat(int senderId, SenderRole senderRole, long ts) implements Message {}
 
-  /** A server's vote for itself during an election round; the highest {@code candidateId} wins. */
-  record ElectionVote(int senderId, SenderRole senderRole, long ts, int candidateId)
-      implements Message {}
+  /**
+   * Bully election inquiry: a server calling an election announces its candidacy. Servers with a
+   * higher id reply with an {@link Answer} and start their own election; the {@code senderId} is
+   * the candidate.
+   */
+  record ElectionInquiry(int senderId, SenderRole senderRole, long ts) implements Message {}
 
-  /** The winner of an election announces the new {@code leaderId} to servers and clients. */
+  /**
+   * Bully answer ("I am alive"): a higher-id server replies to a lower-id {@link ElectionInquiry}
+   * to say it will take over, so the lower candidate stands down and waits for the {@link
+   * IAmLeader}.
+   */
+  record Answer(int senderId, SenderRole senderRole, long ts) implements Message {}
+
+  /**
+   * Bully coordinator message: the winner of an election announces the new {@code leaderId} (equal
+   * to its own id) to all servers and clients.
+   */
   record IAmLeader(int senderId, SenderRole senderRole, long ts, int leaderId) implements Message {}
 
   /** A chat line: client to leader, then fanned back out by the leader to every client. */
