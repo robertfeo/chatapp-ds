@@ -13,7 +13,7 @@ chat room and exchange messages through a group of replicated servers
 coordinated by a single elected leader. The system scales in the number of
 clients and tolerates the crash of any single server, including the leader.
 
-Group 16 project for the Distributed Systems course, University of Stuttgart,
+Group 16 project for the Distributed Systems course, Reutlingen University,
 Sommersemester 2026.
 
 > **Status:** under active development. The repository skeleton and CI are in
