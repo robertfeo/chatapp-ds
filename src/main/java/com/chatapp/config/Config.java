@@ -17,6 +17,12 @@ public final class Config {
   /** How long an election round collects votes before the highest id wins, in seconds. */
   public static final int ELECTION_TIMEOUT_S = 2;
 
+  /**
+   * Delay after startup before a server runs its one-shot cold-start election, in seconds. Gives
+   * the group view time to converge so the highest live id wins on the first round.
+   */
+  public static final int ELECTION_BOOTSTRAP_DELAY_S = 3;
+
   /** How often a server re-announces itself for discovery, in seconds. */
   public static final int DISCOVERY_REANNOUNCE_S = 10;
 

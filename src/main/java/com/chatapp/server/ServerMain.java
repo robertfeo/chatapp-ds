@@ -193,6 +193,10 @@ public final class ServerMain {
 
     heartbeat.start();
 
+    // No prior leader exists on a cold start, so kick off a one-shot election once the group view
+    // has had time to converge; the highest live id becomes the initial leader.
+    election.scheduleBootstrap();
+
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(

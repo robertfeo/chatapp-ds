@@ -3,7 +3,6 @@ package com.chatapp.election;
 import com.chatapp.config.Config;
 import com.chatapp.config.ServerConfig;
 import com.chatapp.discovery.GroupView;
-import com.chatapp.discovery.Peer;
 import com.chatapp.discovery.UdpSender;
 import com.chatapp.protocol.Message.ElectionVote;
 import com.chatapp.protocol.Message.IAmLeader;
@@ -33,6 +32,7 @@ public final class ElectionService implements AutoCloseable {
 
   private final int myId;
   private final int discoveryPort;
+  private final String broadcastAddr;
   private final GroupView groupView;
   private final UdpSender udpSend;
   private final AtomicInteger currentLeaderId;
@@ -57,10 +57,34 @@ public final class ElectionService implements AutoCloseable {
       IntConsumer onLeaderChanged) {
     this.myId = config.serverId();
     this.discoveryPort = config.discoveryPort();
+    this.broadcastAddr = config.broadcastAddr();
     this.groupView = groupView;
     this.udpSend = udpSend;
     this.currentLeaderId = currentLeaderId;
     this.onLeaderChanged = onLeaderChanged;
+  }
+
+  /**
+   * Schedules a one-shot cold-start election. A freshly booted cluster has no prior leader to die,
+   * so the death-triggered path in {@link #triggerElection()} never fires on its own. After the
+   * group view has had {@link Config#ELECTION_BOOTSTRAP_DELAY_S} seconds to converge, if no leader
+   * is known yet, run one election so the highest live id becomes the initial leader.
+   */
+  public void scheduleBootstrap() {
+    scheduler.schedule(
+        () -> {
+          if (currentLeaderId.get() == -1) {
+            log.info("event=bootstrap_election myId={}", myId);
+            triggerElection();
+          } else {
+            log.debug(
+                "event=bootstrap_skipped reason=leader_known myId={} leaderId={}",
+                myId,
+                currentLeaderId.get());
+          }
+        },
+        Config.ELECTION_BOOTSTRAP_DELAY_S,
+        TimeUnit.SECONDS);
   }
 
   /**
@@ -72,7 +96,7 @@ public final class ElectionService implements AutoCloseable {
       log.debug("event=election_skipped reason=already_running myId={}", myId);
       return;
     }
-    log.info("event=election_started myId={}", myId);
+    log.info("event=election_started myId={} group={}", myId, groupView.ids());
     collectedCandidateIds.clear();
     collectedCandidateIds.add(myId); // self-vote
 
@@ -95,8 +119,18 @@ public final class ElectionService implements AutoCloseable {
   /**
    * Called when an {@link IAmLeader} arrives from another server. Accepts the winner and stops any
    * running election.
+   *
+   * <p>Highest-id-wins is enforced here: an announcement of a leader with a <em>lower</em> id than
+   * our own is stale or the result of a vote that never reached the announcer, so we refuse it and
+   * assert ourselves with a fresh election instead of silently accepting a worse leader. This keeps
+   * the cluster self-correcting if elections race or a vote is lost.
    */
   public void onLeaderAnnounced(IAmLeader msg) {
+    if (msg.leaderId() < myId) {
+      log.info("event=leader_rejected myId={} announcedLeaderId={}", myId, msg.leaderId());
+      triggerElection();
+      return;
+    }
     currentLeaderId.set(msg.leaderId());
     electionRunning.set(false);
     onLeaderChanged.accept(msg.leaderId());
@@ -104,15 +138,14 @@ public final class ElectionService implements AutoCloseable {
   }
 
   private void broadcastVote() {
+    // Broadcast (not per-peer unicast): on localhost the peers share one discovery port via
+    // SO_REUSEPORT, where unicast is delivered to a single socket; only a broadcast reaches them
+    // all. On a real LAN the broadcast reaches every server on the subnet just the same.
     ElectionVote vote = new ElectionVote(myId, SenderRole.SERVER, System.currentTimeMillis(), myId);
-    for (Peer peer : groupView.snapshot()) {
-      if (peer.id() == myId) continue;
-      try {
-        udpSend.send(vote, new InetSocketAddress(peer.host(), discoveryPort));
-      } catch (Exception e) {
-        log.warn(
-            "event=vote_send_failed myId={} target={} error={}", myId, peer.id(), e.toString());
-      }
+    try {
+      udpSend.send(vote, new InetSocketAddress(broadcastAddr, discoveryPort));
+    } catch (Exception e) {
+      log.warn("event=vote_send_failed myId={} error={}", myId, e.toString());
     }
   }
 
@@ -139,19 +172,14 @@ public final class ElectionService implements AutoCloseable {
   }
 
   private void broadcastLeadership() {
+    // Broadcast for the same reason as the vote: reach every peer, including localhost siblings
+    // sharing the discovery port via SO_REUSEPORT.
     IAmLeader announcement =
         new IAmLeader(myId, SenderRole.SERVER, System.currentTimeMillis(), myId);
-    for (Peer peer : groupView.snapshot()) {
-      if (peer.id() == myId) continue;
-      try {
-        udpSend.send(announcement, new InetSocketAddress(peer.host(), discoveryPort));
-      } catch (Exception e) {
-        log.warn(
-            "event=leader_announce_failed myId={} target={} error={}",
-            myId,
-            peer.id(),
-            e.toString());
-      }
+    try {
+      udpSend.send(announcement, new InetSocketAddress(broadcastAddr, discoveryPort));
+    } catch (Exception e) {
+      log.warn("event=leader_announce_failed myId={} error={}", myId, e.toString());
     }
     log.info("event=leader_elected myId={}", myId);
   }
