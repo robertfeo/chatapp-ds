@@ -55,13 +55,18 @@ same to learn which server is the leader before opening its TCP connection.
 Announcements repeat periodically (about every 10 s) so late joiners are picked
 up. There is no central registry; each participant builds its own group view.
 
-### Leader election (highest-ID-wins)
+### Leader election (Bully algorithm)
 
-Election is **highest-ID-wins**, not LCR. When a server notices the leader's
-heartbeat has stopped, it broadcasts an `ELECTION_VOTE` with its own id,
-collects votes for a short window (2 s), and the highest id seen wins. The
-winner broadcasts `I_AM_LEADER` to servers and clients. The result is
-deterministic: the same set of live ids always elects the same leader.
+Election is the **Bully algorithm** (Garcia-Molina), the highest-ID-wins scheme,
+not LCR. When a server notices the leader's heartbeat has stopped, it broadcasts
+an `ELECTION` inquiry. Any live server with a higher id replies with `ANSWER`
+("I am alive") and runs its own election; if no higher id answers within ~2 s,
+the server wins and broadcasts `I_AM_LEADER` (the coordinator message). An
+`I_AM_LEADER` from a lower id is bullied out with a new election. The highest
+live id always wins, so the outcome is deterministic for a given set of servers.
+
+Server ids are unique numbers generated randomly at startup (from a large space,
+so collisions are negligible), so they never have to be assigned by hand.
 
 ### Heartbeats and failure detection
 
@@ -129,33 +134,33 @@ make format            # auto-apply Google Java Format
 
 ## Run
 
-Every host runs the **same** fat-jar; behaviour is selected by a subcommand and
-configured purely through environment variables (no hardcoded hosts).
+The same fat-jar runs on every host; behaviour is picked by the subcommand. **No configuration is
+required**: the server detects its own LAN address and broadcast, picks a random id, and uses the
+default ports. The environment variables below are optional overrides.
 
 ```bash
-# Start a server (highest SERVER_ID becomes leader on a cold start)
-SERVER_ID=3 LISTEN_PORT=5003 DISCOVERY_PORT=5000 BROADCAST_ADDR=255.255.255.255 \
-  java -jar target/chatapp.jar server
+# Start a server (no arguments, no env vars needed)
+java -jar target/chatapp.jar server
 
 # Start a client
-DISCOVERY_PORT=5000 BROADCAST_ADDR=255.255.255.255 \
-  java -jar target/chatapp.jar client
+java -jar target/chatapp.jar client
 ```
 
-The demo runs on three physical hosts on a private LAN: a Raspberry Pi 4 as the
-default leader (highest ID) plus two laptops as replicas and clients. No Docker,
-no VMs. Avoid eduroam, which blocks UDP broadcast; use a phone hotspot or a home
-Wi-Fi router.
+The demo runs on three physical hosts on a private LAN: a Raspberry Pi 4 plus two
+laptops, as servers and clients. Each server picks a random id at startup, so the
+leader is whichever server drew the highest id. No Docker, no VMs. Avoid eduroam,
+which blocks UDP broadcast; use a phone hotspot or a home Wi-Fi router. A ready
+runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 
-### Configuration
+### Configuration (optional overrides)
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `SERVER_ID` | Unique numeric server id (required for servers) | none |
-| `LISTEN_HOST` | Address the server binds | `0.0.0.0` |
-| `LISTEN_PORT` | TCP port for chat and state sync | none |
-| `DISCOVERY_PORT` | UDP port for discovery and heartbeats | none |
-| `BROADCAST_ADDR` | Subnet broadcast address for discovery | none |
+| `SERVER_ID` | Unique numeric server id. Generated randomly when unset; set it only when you want deterministic ids (several servers on one machine). | auto (random) |
+| `LISTEN_HOST` | Address the server binds; the advertised address is auto-detected from the LAN when this is `0.0.0.0` | `0.0.0.0` |
+| `LISTEN_PORT` | TCP port for chat and state sync | `6000` |
+| `DISCOVERY_PORT` | UDP port for discovery and heartbeats (not 4500: that is Windows' IPsec NAT-T port) | `45678` |
+| `BROADCAST_ADDR` | Fallback broadcast target; the server also announces to every interface's own broadcast | `255.255.255.255` |
 
 ### Timing constants
 

@@ -1,6 +1,5 @@
 package com.chatapp.server;
 
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -26,15 +25,19 @@ class ServerBootstrapIT {
       System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
 
   @Test
-  void failsFastWhenServerIdIsMissing() throws IOException, InterruptedException {
+  void autoDerivesServerIdWhenNotSet() throws IOException, InterruptedException {
     requireJar();
-    Process process = launch(Map.of(), /* removeServerId= */ true);
-    String output = drain(process);
-
-    assertTrue(process.waitFor(10, TimeUnit.SECONDS), "process should exit quickly, not hang");
-    assertNotEquals(0, process.exitValue(), "missing SERVER_ID must fail fast with non-zero exit");
-    assertTrue(
-        output.contains("SERVER_ID"), "error should name the missing variable, was:\n" + output);
+    // No SERVER_ID: the server must derive one from the host's LAN address and start anyway.
+    Process process =
+        launch(Map.of("LISTEN_PORT", "6011", "DISCOVERY_PORT", "4511"), /* removeServerId= */ true);
+    try {
+      String line = readUntil(process, "event=server_id_auto", Duration.ofSeconds(10));
+      assertTrue(line.contains("serverId="), "auto-derivation should log the chosen id: " + line);
+      assertTrue(process.isAlive(), "server should keep running on an auto-derived id, not exit");
+    } finally {
+      process.destroyForcibly();
+      process.waitFor(5, TimeUnit.SECONDS);
+    }
   }
 
   @Test
@@ -74,20 +77,6 @@ class ServerBootstrapIT {
     }
     environment.putAll(new HashMap<>(env));
     return pb.start();
-  }
-
-  /** Read all output until the process closes its stream (it has exited). */
-  private static String drain(Process process) throws IOException {
-    try (BufferedReader reader =
-        new BufferedReader(
-            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-      StringBuilder sb = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        sb.append(line).append('\n');
-      }
-      return sb.toString();
-    }
   }
 
   /** Read output lines until one contains {@code needle}, or fail when the deadline passes. */

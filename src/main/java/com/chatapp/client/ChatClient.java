@@ -1,6 +1,7 @@
 package com.chatapp.client;
 
 import com.chatapp.config.Config;
+import com.chatapp.discovery.BroadcastTargets;
 import com.chatapp.discovery.Peer;
 import com.chatapp.protocol.Codec;
 import com.chatapp.protocol.CodecException;
@@ -18,6 +19,7 @@ import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
@@ -138,8 +140,17 @@ public final class ChatClient {
               InetAddress.getLocalHost().getHostAddress(),
               0);
       byte[] payload = Codec.encode(hello);
-      InetAddress dst = InetAddress.getByName(broadcastAddr);
-      socket.send(new DatagramPacket(payload, payload.length, dst, discoveryPort));
+      // Send to every interface's broadcast (not just one address): on a host with a VPN and many
+      // virtual adapters, a single 255.255.255.255 send leaves the wrong interface and never
+      // reaches
+      // the leader on the LAN.
+      for (InetSocketAddress target : BroadcastTargets.compute(broadcastAddr, discoveryPort)) {
+        try {
+          socket.send(new DatagramPacket(payload, payload.length, target));
+        } catch (IOException ignored) {
+          // a dead virtual interface must not stop the others
+        }
+      }
 
       Map<Integer, DiscoveryReply> replies = new HashMap<>();
       long deadline = System.currentTimeMillis() + DISCOVERY_TIMEOUT_MS;

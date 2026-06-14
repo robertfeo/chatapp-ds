@@ -11,12 +11,15 @@ import com.chatapp.protocol.Message.SenderRole;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.StandardSocketOptions;
-import java.net.UnknownHostException;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -103,7 +106,12 @@ public final class DiscoveryService implements AutoCloseable {
         this::announceQuietly, 0, Config.DISCOVERY_REANNOUNCE_S, TimeUnit.SECONDS);
   }
 
-  /** Broadcast a {@link DiscoveryHello} to the configured broadcast address. */
+  /**
+   * Broadcast a {@link DiscoveryHello}. Sent to every live interface's own broadcast address
+   * <em>and</em> the configured fallback (the limited broadcast {@code 255.255.255.255} by
+   * default), so it leaves the real LAN interface even on a host crowded with VPN and virtual
+   * adapters where a single broadcast target would be sent out the wrong one.
+   */
   public void announce() throws IOException {
     DiscoveryHello hello =
         new DiscoveryHello(
@@ -112,13 +120,26 @@ public final class DiscoveryService implements AutoCloseable {
             System.currentTimeMillis(),
             advertisedHost,
             config.listenPort());
-    InetAddress dst = InetAddress.getByName(config.broadcastAddr());
-    send(hello, new InetSocketAddress(dst, config.discoveryPort()));
+    IOException last = null;
+    for (InetSocketAddress target : broadcastTargets()) {
+      try {
+        send(hello, target);
+      } catch (IOException e) {
+        last = e; // a dead virtual interface must not stop the others
+      }
+    }
     log.info(
         "event=group_view serverId={} size={} ids={}",
         config.serverId(),
         groupView.size(),
         groupView.ids());
+    if (last != null && groupView.size() == 1) {
+      throw last; // nothing got out and we are still alone; surface it to announceQuietly
+    }
+  }
+
+  private List<InetSocketAddress> broadcastTargets() {
+    return BroadcastTargets.compute(config.broadcastAddr(), config.discoveryPort());
   }
 
   private void announceQuietly() {
@@ -173,9 +194,14 @@ public final class DiscoveryService implements AutoCloseable {
     if (hello.senderId() == config.serverId()) {
       return; // our own broadcast looped back
     }
-    learn(hello.senderId(), packet.getAddress().getHostAddress(), hello.port());
+    // Only servers join the group view; a client's hello must not be tracked as a peer (it has no
+    // listening port and never sends heartbeats, which would otherwise churn the view).
+    if (hello.senderRole() == SenderRole.SERVER) {
+      learn(hello.senderId(), packet.getAddress().getHostAddress(), hello.port());
+    }
 
-    // Reply directly to the sender so it learns about us and our current leader id.
+    // Reply directly to the sender so it learns about us and our current leader id (clients need
+    // this to find the leader, even though they are not added to the group view).
     DiscoveryReply reply =
         new DiscoveryReply(
             config.serverId(),
@@ -239,10 +265,40 @@ public final class DiscoveryService implements AutoCloseable {
     if (configured != null && !configured.isBlank() && !configured.equals("0.0.0.0")) {
       return configured;
     }
-    try {
-      return InetAddress.getLocalHost().getHostAddress();
-    } catch (UnknownHostException e) {
-      return "127.0.0.1";
+    InetAddress lan = primaryLanAddress();
+    return lan != null ? lan.getHostAddress() : "127.0.0.1";
+  }
+
+  /** The host's primary LAN IPv4 (the interface that owns the default route), or {@code null}. */
+  private static InetAddress primaryLanAddress() {
+    // The kernel picks the default-route interface's source address; no packet is sent.
+    try (DatagramSocket probe = new DatagramSocket()) {
+      probe.connect(InetAddress.getByName("8.8.8.8"), 53);
+      InetAddress local = probe.getLocalAddress();
+      if (local instanceof Inet4Address
+          && !local.isAnyLocalAddress()
+          && !local.isLoopbackAddress()) {
+        return local;
+      }
+    } catch (IOException ignored) {
+      // fall through to interface enumeration
     }
+    try {
+      for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+        if (!nif.isUp() || nif.isLoopback()) {
+          continue;
+        }
+        for (InetAddress addr : Collections.list(nif.getInetAddresses())) {
+          if (addr instanceof Inet4Address
+              && !addr.isLoopbackAddress()
+              && !addr.isLinkLocalAddress()) {
+            return addr;
+          }
+        }
+      }
+    } catch (SocketException ignored) {
+      // no usable interface
+    }
+    return null;
   }
 }

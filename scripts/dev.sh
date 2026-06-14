@@ -13,7 +13,7 @@
 #   SERVERS         number of servers           (default 3, ids 1..SERVERS)
 #   CLIENTS         number of clients           (default 2)
 #   BASE_LISTEN_PORT  server i listens on BASE+i (default 6000 -> 6001,6002,...)
-#   DISCOVERY_PORT  shared UDP discovery port   (default 4500)
+#   DISCOVERY_PORT  shared UDP discovery port   (default 45678)
 #   BROADCAST_ADDR  discovery broadcast address (default 255.255.255.255)
 #   LISTEN_HOST     server bind address         (default 127.0.0.1)
 #   JAR             fat-jar path                (default target/chatapp.jar)
@@ -27,7 +27,7 @@ set -euo pipefail
 SERVERS="${SERVERS:-3}"
 CLIENTS="${CLIENTS:-2}"
 BASE_LISTEN_PORT="${BASE_LISTEN_PORT:-6000}"
-DISCOVERY_PORT="${DISCOVERY_PORT:-4500}"
+DISCOVERY_PORT="${DISCOVERY_PORT:-45678}"
 BROADCAST_ADDR="${BROADCAST_ADDR:-255.255.255.255}"
 LISTEN_HOST="${LISTEN_HOST:-127.0.0.1}"
 JAR="${JAR:-target/chatapp.jar}"
