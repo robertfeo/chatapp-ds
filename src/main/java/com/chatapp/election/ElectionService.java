@@ -164,10 +164,15 @@ public final class ElectionService implements AutoCloseable {
   public void onCoordinator(IAmLeader msg) {
     if (msg.leaderId() >= myId) {
       coordinatorSeen = true;
-      currentLeaderId.set(msg.leaderId());
       electionRunning.set(false);
-      onLeaderChanged.accept(msg.leaderId());
-      log.info("event=leader_accepted myId={} leaderId={}", myId, msg.leaderId());
+      // Idempotent: a multi-interface broadcast (or a network retransmit) delivers the same
+      // IAmLeader more than once. Only react to an actual leader change, so we do not reconnect the
+      // replica link twice and leak a connection.
+      int previous = currentLeaderId.getAndSet(msg.leaderId());
+      if (previous != msg.leaderId()) {
+        onLeaderChanged.accept(msg.leaderId());
+        log.info("event=leader_accepted myId={} leaderId={}", myId, msg.leaderId());
+      }
     } else {
       log.info("event=leader_rejected myId={} announcedLeaderId={}", myId, msg.leaderId());
       startElection();
