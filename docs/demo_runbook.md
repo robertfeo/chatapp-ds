@@ -78,8 +78,12 @@ needs no arguments or env vars).
 
 The first time, Windows Defender Firewall pops up "Allow Java to communicate" - tick **Private
 networks** and **Allow access**. (Manual fallback, admin PowerShell:
-`New-NetFirewallRule -DisplayName "chatapp-udp" -Direction Inbound -Protocol UDP -LocalPort 4500 -Action Allow`
+`New-NetFirewallRule -DisplayName "chatapp-udp" -Direction Inbound -Protocol UDP -LocalPort 45678 -Action Allow`
 and the same for `-Protocol TCP -LocalPort 6000`.)
+
+> Discovery uses UDP **45678**, deliberately not 4500: on Windows, port 4500 (IPsec NAT-T) is owned
+> by the IKEEXT service, which silently swallows every inbound discovery datagram, so a server on
+> 4500 can send but never receive. Any free port avoids it.
 
 **Expected within a few seconds**, on both server logs:
 
@@ -137,7 +141,7 @@ With both clients connected and chatting:
 - **Servers never discover each other** - broadcast is blocked. Confirm same SSID (not eduroam,
   not "guest" Wi-Fi, which often isolates clients). Confirm the server runs on **native Windows, not
   WSL** (WSL2's NAT keeps its broadcast off the LAN). On Windows, make sure the firewall allows
-  inbound UDP 4500 on **both** machines, and that no leftover BLOCK rule for `java.exe` overrides it.
+  inbound UDP 45678 on **both** machines, and that no leftover BLOCK rule for `java.exe` overrides it.
   The server already announces to every interface's broadcast plus `255.255.255.255`, so a single
   wrong adapter is not the cause.
 - **Client says "No leader found, retrying"** - the servers have no leader yet (still electing) or

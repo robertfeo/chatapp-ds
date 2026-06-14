@@ -32,8 +32,12 @@ public final class Config {
   /** Default TCP chat port when {@code LISTEN_PORT} is not set. */
   public static final int DEFAULT_LISTEN_PORT = 6000;
 
-  /** Default UDP discovery/heartbeat port when {@code DISCOVERY_PORT} is not set. */
-  public static final int DEFAULT_DISCOVERY_PORT = 4500;
+  /**
+   * Default UDP discovery/heartbeat port when {@code DISCOVERY_PORT} is not set. Not 4500: that is
+   * the IPsec NAT-T port, owned by the Windows IKEEXT service, which would swallow all inbound
+   * discovery datagrams on Windows hosts.
+   */
+  public static final int DEFAULT_DISCOVERY_PORT = 45678;
 
   /** Default subnet broadcast address when {@code BROADCAST_ADDR} is not set. */
   public static final String DEFAULT_BROADCAST_ADDR = "255.255.255.255";

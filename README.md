@@ -159,7 +159,7 @@ runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 | `SERVER_ID` | Unique numeric server id. Generated randomly when unset; set it only when you want deterministic ids (several servers on one machine). | auto (random) |
 | `LISTEN_HOST` | Address the server binds; the advertised address is auto-detected from the LAN when this is `0.0.0.0` | `0.0.0.0` |
 | `LISTEN_PORT` | TCP port for chat and state sync | `6000` |
-| `DISCOVERY_PORT` | UDP port for discovery and heartbeats | `4500` |
+| `DISCOVERY_PORT` | UDP port for discovery and heartbeats (not 4500: that is Windows' IPsec NAT-T port) | `45678` |
 | `BROADCAST_ADDR` | Fallback broadcast target; the server also announces to every interface's own broadcast | `255.255.255.255` |
 
 ### Timing constants
