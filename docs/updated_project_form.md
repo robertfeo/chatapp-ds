@@ -41,7 +41,7 @@ Dynamic discovery uses **UDP broadcast** on the local subnet. There is no centra
 
 Leader election uses the **Bully algorithm** (Garcia-Molina, 1982), the crash-fault-tolerant Highest-ID-Wins scheme from the lecture. Not LCR and not a ring: the servers form a small group that already knows each other's ids through discovery.
 
-- Each server has a unique numeric id, derived automatically from the host's LAN IPv4 address (its last octet) so it never has to be assigned by hand; on one subnet every host is distinct.
+- Each server has a unique numeric id, generated randomly at startup from a large space so it never has to be assigned by hand and the collision probability between the few servers is negligible (the same approach as random node ids in DHTs).
 - Each server tracks heartbeats from its peers. If the leader's heartbeat is missing for more than the timeout (6 s), the server starts an election.
 - Three message types (Bully): `ELECTION` (a candidate calls an election), `ANSWER` (a higher-id server replies "I am alive" to suppress a lower candidate and take over), and `I_AM_LEADER` (the winning coordinator announces itself).
 - Election round for a server P:

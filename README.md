@@ -65,8 +65,8 @@ the server wins and broadcasts `I_AM_LEADER` (the coordinator message). An
 `I_AM_LEADER` from a lower id is bullied out with a new election. The highest
 live id always wins, so the outcome is deterministic for a given set of servers.
 
-Server ids are unique numbers derived automatically from each host's LAN IP, so
-they never have to be assigned by hand.
+Server ids are unique numbers generated randomly at startup (from a large space,
+so collisions are negligible), so they never have to be assigned by hand.
 
 ### Heartbeats and failure detection
 
@@ -138,7 +138,7 @@ Every host runs the **same** fat-jar; behaviour is selected by a subcommand and
 configured purely through environment variables (no hardcoded hosts).
 
 ```bash
-# Start a server (its id is derived automatically from this host's LAN IP)
+# Start a server (its id is generated randomly at startup)
 LISTEN_PORT=5003 DISCOVERY_PORT=5000 BROADCAST_ADDR=255.255.255.255 \
   java -jar target/chatapp.jar server
 
@@ -148,8 +148,8 @@ DISCOVERY_PORT=5000 BROADCAST_ADDR=255.255.255.255 \
 ```
 
 The demo runs on three physical hosts on a private LAN: a Raspberry Pi 4 plus two
-laptops, as servers and clients. Each server's id comes from its IP, so the host
-with the highest LAN IP becomes the leader. No Docker, no VMs. Avoid eduroam,
+laptops, as servers and clients. Each server picks a random id at startup, so the
+leader is whichever server drew the highest id. No Docker, no VMs. Avoid eduroam,
 which blocks UDP broadcast; use a phone hotspot or a home Wi-Fi router. A ready
 runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 
@@ -157,7 +157,7 @@ runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `SERVER_ID` | Unique numeric server id. Auto-derived from the host's LAN IP when unset; set it only to run several servers on one machine. | auto (from IP) |
+| `SERVER_ID` | Unique numeric server id. Generated randomly when unset; set it only when you want deterministic ids (several servers on one machine). | auto (random) |
 | `LISTEN_HOST` | Address the server binds | `0.0.0.0` |
 | `LISTEN_PORT` | TCP port for chat and state sync | none |
 | `DISCOVERY_PORT` | UDP port for discovery and heartbeats | none |

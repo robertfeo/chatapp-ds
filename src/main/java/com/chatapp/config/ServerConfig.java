@@ -1,11 +1,6 @@
 package com.chatapp.config;
 
-import java.net.DatagramSocket;
-import java.net.Inet4Address;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.util.Collections;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,9 +11,9 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li>{@code SERVER_ID} (optional): unique numeric id; the highest live id becomes leader. When
- *       not set it is <b>derived automatically</b> from the host's LAN IPv4 (its last octet), so it
- *       never has to be assigned by hand on the demo hosts. Set it explicitly only to run several
- *       servers on one machine (the localhost dev runner and the tests do this).
+ *       not set it is <b>generated randomly</b> at startup, so it never has to be assigned by hand
+ *       and is not tied to the host's address. Set it explicitly only when you want deterministic
+ *       ids (the localhost dev runner and the tests do this).
  *   <li>{@code LISTEN_HOST} (default {@value Config#DEFAULT_LISTEN_HOST}): TCP bind address.
  *   <li>{@code LISTEN_PORT} (default {@value Config#DEFAULT_LISTEN_PORT}): TCP chat/state-sync
  *       port.
@@ -62,53 +57,15 @@ public record ServerConfig(
   }
 
   /**
-   * Derives a unique numeric server id from the host's LAN IPv4 address (its last octet). On one
-   * router/subnet every host has a distinct address, hence a distinct id, with no manual
-   * assignment; the highest id (the highest IP) becomes the leader.
+   * Generates a random numeric server id at startup, so ids never have to be assigned by hand and
+   * are not tied to the host's address. The id is drawn from a large space, so a collision between
+   * the few servers in the group is negligible (the same idea as random node ids in DHTs, or the
+   * client's ephemeral id). The highest id drawn becomes the leader.
    */
-  static int deriveServerId() throws ConfigException {
-    InetAddress ip = primaryLanAddress();
-    if (ip == null) {
-      throw new ConfigException(
-          "could not determine a LAN IPv4 address to derive SERVER_ID from; "
-              + "connect to the network, or set SERVER_ID explicitly");
-    }
-    int lastOctet = ip.getAddress()[3] & 0xFF;
-    log.info("event=server_id_auto serverId={} fromIp={}", lastOctet, ip.getHostAddress());
-    return lastOctet;
-  }
-
-  /** The host's primary LAN IPv4 (the interface that owns the default route), or {@code null}. */
-  private static InetAddress primaryLanAddress() {
-    // The kernel picks the default-route interface's source address; no packet is sent.
-    try (DatagramSocket probe = new DatagramSocket()) {
-      probe.connect(InetAddress.getByName("8.8.8.8"), 53);
-      InetAddress local = probe.getLocalAddress();
-      if (local instanceof Inet4Address
-          && !local.isAnyLocalAddress()
-          && !local.isLoopbackAddress()) {
-        return local;
-      }
-    } catch (Exception ignored) {
-      // fall through to interface enumeration
-    }
-    try {
-      for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-        if (!nif.isUp() || nif.isLoopback()) {
-          continue;
-        }
-        for (InetAddress addr : Collections.list(nif.getInetAddresses())) {
-          if (addr instanceof Inet4Address
-              && !addr.isLoopbackAddress()
-              && !addr.isLinkLocalAddress()) {
-            return addr;
-          }
-        }
-      }
-    } catch (SocketException ignored) {
-      // no usable interface
-    }
-    return null;
+  static int deriveServerId() {
+    int id = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
+    log.info("event=server_id_auto serverId={} source=random", id);
+    return id;
   }
 
   private static int requiredInt(Function<String, String> env, String key) throws ConfigException {
