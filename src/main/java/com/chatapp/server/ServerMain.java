@@ -70,6 +70,12 @@ public final class ServerMain {
     AtomicInteger currentLeaderId = new AtomicInteger(-1);
     ChatHistory chatHistory = new ChatHistory();
 
+    // The leader's connection counts, learned from its heartbeats, so a replica's dashboard can
+    // show the cluster's client/replica counts (its own are always zero: clients connect only to
+    // the leader).
+    AtomicInteger leaderClientCount = new AtomicInteger(0);
+    AtomicInteger leaderReplicaCount = new AtomicInteger(0);
+
     // AtomicReferences break circular construction dependencies.
     AtomicReference<ElectionService> electionRef = new AtomicReference<>();
     AtomicReference<HeartbeatService> heartbeatRef = new AtomicReference<>();
@@ -88,7 +94,14 @@ public final class ServerMain {
             },
             msg -> {
               switch (msg) {
-                case Message.Heartbeat hb -> heartbeatRef.get().onHeartbeatReceived(hb);
+                case Message.Heartbeat hb -> {
+                  heartbeatRef.get().onHeartbeatReceived(hb);
+                  // Mirror the leader's live connection counts so replicas show the same numbers.
+                  if (hb.senderId() == currentLeaderId.get()) {
+                    leaderClientCount.set(hb.connectedClients());
+                    leaderReplicaCount.set(hb.connectedReplicas());
+                  }
+                }
                 case Message.ElectionInquiry e -> electionRef.get().onElectionInquiry(e);
                 case Message.Answer a -> electionRef.get().onAnswer(a);
                 case Message.IAmLeader leader -> electionRef.get().onCoordinator(leader);
@@ -167,7 +180,9 @@ public final class ServerMain {
               if (deadPeerId == currentLeaderId.get()) {
                 election.startElection();
               }
-            });
+            },
+            tcpServer::clientCount,
+            tcpServer::replicaCount);
 
     ReplicaConnector replicaConnector =
         new ReplicaConnector(config, groupView, currentLeaderId, chatHistory);
@@ -199,7 +214,7 @@ public final class ServerMain {
     heartbeat.start();
 
     // Live terminal dashboard: only on an interactive TTY, and never required for the server to
-    // run. A piped/CI run (System.console() == null) or any Lanterna failure falls back to the
+    // run. A piped/CI run (System.console() == null) or any terminal-init failure falls back to the
     // plain stdout logging the tests and demo scripts rely on.
     if (dashboardEnabled()) {
       DashboardEvents events = ServerDashboard.newEventBuffer();
@@ -211,8 +226,14 @@ public final class ServerMain {
               config.discoveryPort(),
               currentLeaderId,
               groupView,
-              tcpServer::clientCount,
-              tcpServer::replicaCount,
+              // Leader shows its own live counts; a replica shows the leader's (from its
+              // heartbeats), so every panel displays the same cluster-wide numbers.
+              () ->
+                  currentLeaderId.get() == myId ? tcpServer.clientCount() : leaderClientCount.get(),
+              () ->
+                  currentLeaderId.get() == myId
+                      ? tcpServer.replicaCount()
+                      : leaderReplicaCount.get(),
               chatHistory::size,
               events);
       try {
