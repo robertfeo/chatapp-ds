@@ -78,8 +78,16 @@ public sealed interface Message
       int senderId, SenderRole senderRole, long ts, String host, int port, Integer leaderId)
       implements Message {}
 
-  /** Liveness ping a server unicasts to each peer every {@code HEARTBEAT_INTERVAL_S}. */
-  record Heartbeat(int senderId, SenderRole senderRole, long ts) implements Message {}
+  /**
+   * Liveness ping a server unicasts to each peer every {@code HEARTBEAT_INTERVAL_S}. It also
+   * carries the sender's live connection counts ({@code connectedClients}, {@code
+   * connectedReplicas}) so that replicas can show the leader's chat-participant counts in their
+   * dashboard, not just their own (which are always zero, since clients only connect to the
+   * leader).
+   */
+  record Heartbeat(
+      int senderId, SenderRole senderRole, long ts, int connectedClients, int connectedReplicas)
+      implements Message {}
 
   /**
    * Bully election inquiry: a server calling an election announces its candidacy. Servers with a

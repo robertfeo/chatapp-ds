@@ -32,7 +32,7 @@ class CodecTest {
         new DiscoveryHello(3, SenderRole.SERVER, 1000L, "192.168.0.3", 5003),
         new DiscoveryReply(2, SenderRole.SERVER, 1001L, "192.168.0.2", 5002, 3),
         new DiscoveryReply(2, SenderRole.SERVER, 1001L, "192.168.0.2", 5002, null),
-        new Heartbeat(3, SenderRole.SERVER, 1002L),
+        new Heartbeat(3, SenderRole.SERVER, 1002L, 2, 1),
         new ElectionInquiry(1, SenderRole.SERVER, 1003L),
         new Answer(2, SenderRole.SERVER, 1003L),
         new IAmLeader(3, SenderRole.SERVER, 1004L, 3),
@@ -67,7 +67,8 @@ class CodecTest {
   @Test
   void encodesTheTypeDiscriminator() throws CodecException {
     String json =
-        new String(Codec.encode(new Heartbeat(3, SenderRole.SERVER, 5L)), StandardCharsets.UTF_8);
+        new String(
+            Codec.encode(new Heartbeat(3, SenderRole.SERVER, 5L, 0, 0)), StandardCharsets.UTF_8);
     org.junit.jupiter.api.Assertions.assertTrue(
         json.contains("\"type\":\"HEARTBEAT\""), "envelope must carry the type tag: " + json);
   }
@@ -104,6 +105,8 @@ class CodecTest {
             .getBytes(StandardCharsets.UTF_8);
     Message decoded = Codec.decode(withExtra);
     assertNotNull(decoded);
-    assertEquals(new Heartbeat(3, SenderRole.SERVER, 42L), decoded);
+    // The new connection-count fields are absent here (an older peer's heartbeat); they must
+    // default to 0 rather than fail, so a mixed-version cluster still decodes heartbeats.
+    assertEquals(new Heartbeat(3, SenderRole.SERVER, 42L, 0, 0), decoded);
   }
 }

@@ -125,7 +125,8 @@ replicated servers and a single elected leader.
 - Plain **TCP** for the chat fan-out from leader to clients and for state sync.
 - **Java stdlib** networking only (`java.net.DatagramSocket`, `Socket`,
   `ServerSocket`, `java.util.concurrent`). Jackson (JSON) and SLF4J/Logback
-  (logging) are allowed; nothing else for coordination.
+  (logging) are allowed, and JLine drives the interactive server dashboard;
+  nothing else, and nothing for coordination.
 
 **Do not reintroduce (explicitly rejected):**
 - LCR (Le Lann–Chang–Roberts) ring election.

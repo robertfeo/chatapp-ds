@@ -4,6 +4,11 @@ The checklist the team follows during every dry run and during the live demo. Ea
 the steps, the **expected log lines** to watch for, and the pass criterion. It is written so that
 anyone on the team (not only the author) can run it.
 
+> On an interactive terminal each server shows a **live dashboard** (role, current leader, peer set,
+> clients, replicas, history, and a feed of the events below) rather than scrolling logs. Read the
+> expected `event=...` lines off the panel's feed; the full log is also in `logs/server-<id>.log`.
+> Stop a server with `q` or `Ctrl+C` in its panel.
+
 ## Setup (once per host)
 
 - Java 21 on every host (`java -version`).

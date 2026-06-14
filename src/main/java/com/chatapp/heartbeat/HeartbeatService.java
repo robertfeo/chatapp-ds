@@ -14,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
+import java.util.function.IntSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +33,8 @@ public final class HeartbeatService implements AutoCloseable {
   private final GroupView groupView;
   private final UdpSender udpSend;
   private final IntConsumer onPeerDead;
+  private final IntSupplier clientCount;
+  private final IntSupplier replicaCount;
 
   /** Epoch-ms of the last heartbeat received per peer id. */
   private final Map<Integer, Long> lastSeen = new ConcurrentHashMap<>();
@@ -40,12 +43,19 @@ public final class HeartbeatService implements AutoCloseable {
       Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "heartbeat-scheduler"));
 
   public HeartbeatService(
-      ServerConfig config, GroupView groupView, UdpSender udpSend, IntConsumer onPeerDead) {
+      ServerConfig config,
+      GroupView groupView,
+      UdpSender udpSend,
+      IntConsumer onPeerDead,
+      IntSupplier clientCount,
+      IntSupplier replicaCount) {
     this.myId = config.serverId();
     this.discoveryPort = config.discoveryPort();
     this.groupView = groupView;
     this.udpSend = udpSend;
     this.onPeerDead = onPeerDead;
+    this.clientCount = clientCount;
+    this.replicaCount = replicaCount;
   }
 
   /** Begin periodic heartbeat sending and liveness checks. */
@@ -66,7 +76,13 @@ public final class HeartbeatService implements AutoCloseable {
   }
 
   private void sendHeartbeats() {
-    Heartbeat hb = new Heartbeat(myId, SenderRole.SERVER, System.currentTimeMillis());
+    Heartbeat hb =
+        new Heartbeat(
+            myId,
+            SenderRole.SERVER,
+            System.currentTimeMillis(),
+            clientCount.getAsInt(),
+            replicaCount.getAsInt());
     for (Peer peer : groupView.snapshot()) {
       if (peer.id() == myId) continue;
       // Initialize lastSeen so newly discovered peers get a grace period.

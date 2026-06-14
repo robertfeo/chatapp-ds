@@ -95,6 +95,11 @@ event=leader_elected myId=1738492054                      # the host with the hi
 event=leader_accepted myId=... leaderId=1738492054        # the other accepts it
 ```
 
+> On an interactive terminal each server shows a **live dashboard** (role, current leader, the peer
+> set, connected clients and replicas, history size, and a feed of these `event=...` lines) instead
+> of scrolling logs. Read the same events off the panel's feed; the full log is also written to
+> `logs/server-<id>.log`. Press `q` or `Ctrl+C` in the panel to stop that server (step 5 uses this).
+
 If they never discover each other, the broadcast is being dropped: see Troubleshooting.
 
 ## 4. Start the clients
