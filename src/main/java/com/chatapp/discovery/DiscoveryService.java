@@ -14,16 +14,12 @@ import java.net.DatagramSocket;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.StandardSocketOptions;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -142,31 +138,8 @@ public final class DiscoveryService implements AutoCloseable {
     }
   }
 
-  /** The configured broadcast address plus each up, non-loopback interface's own broadcast. */
   private List<InetSocketAddress> broadcastTargets() {
-    Set<InetSocketAddress> targets = new LinkedHashSet<>();
-    int port = config.discoveryPort();
-    try {
-      targets.add(new InetSocketAddress(InetAddress.getByName(config.broadcastAddr()), port));
-    } catch (IOException ignored) {
-      // a bad configured value must not stop interface-derived targets
-    }
-    try {
-      for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-        if (!nif.isUp() || nif.isLoopback()) {
-          continue;
-        }
-        for (InterfaceAddress ia : nif.getInterfaceAddresses()) {
-          InetAddress b = ia.getBroadcast();
-          if (b != null) {
-            targets.add(new InetSocketAddress(b, port));
-          }
-        }
-      }
-    } catch (SocketException ignored) {
-      // fall back to just the configured target
-    }
-    return new ArrayList<>(targets);
+    return BroadcastTargets.compute(config.broadcastAddr(), config.discoveryPort());
   }
 
   private void announceQuietly() {
@@ -221,9 +194,14 @@ public final class DiscoveryService implements AutoCloseable {
     if (hello.senderId() == config.serverId()) {
       return; // our own broadcast looped back
     }
-    learn(hello.senderId(), packet.getAddress().getHostAddress(), hello.port());
+    // Only servers join the group view; a client's hello must not be tracked as a peer (it has no
+    // listening port and never sends heartbeats, which would otherwise churn the view).
+    if (hello.senderRole() == SenderRole.SERVER) {
+      learn(hello.senderId(), packet.getAddress().getHostAddress(), hello.port());
+    }
 
-    // Reply directly to the sender so it learns about us and our current leader id.
+    // Reply directly to the sender so it learns about us and our current leader id (clients need
+    // this to find the leader, even though they are not added to the group view).
     DiscoveryReply reply =
         new DiscoveryReply(
             config.serverId(),

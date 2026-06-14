@@ -2,6 +2,7 @@ package com.chatapp.election;
 
 import com.chatapp.config.Config;
 import com.chatapp.config.ServerConfig;
+import com.chatapp.discovery.BroadcastTargets;
 import com.chatapp.discovery.GroupView;
 import com.chatapp.discovery.UdpSender;
 import com.chatapp.protocol.Message;
@@ -206,14 +207,21 @@ public final class ElectionService implements AutoCloseable {
   }
 
   private void broadcast(Message message) {
-    try {
-      udpSend.send(message, new InetSocketAddress(broadcastAddr, discoveryPort));
-    } catch (Exception e) {
-      log.warn(
-          "event=send_failed myId={} type={} error={}",
-          myId,
-          message.getClass().getSimpleName(),
-          e.toString());
+    // Send to every interface's broadcast (like discovery), not just one address: on a host with a
+    // VPN and many virtual adapters, a single 255.255.255.255 send can leave the wrong interface
+    // and
+    // never reach the LAN, which would split-brain the election.
+    for (InetSocketAddress target : BroadcastTargets.compute(broadcastAddr, discoveryPort)) {
+      try {
+        udpSend.send(message, target);
+      } catch (Exception e) {
+        log.warn(
+            "event=send_failed myId={} type={} target={} error={}",
+            myId,
+            message.getClass().getSimpleName(),
+            target,
+            e.toString());
+      }
     }
   }
 
