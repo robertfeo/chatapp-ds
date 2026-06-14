@@ -11,12 +11,19 @@ import com.chatapp.protocol.Message.SenderRole;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.net.StandardSocketOptions;
-import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -103,7 +110,12 @@ public final class DiscoveryService implements AutoCloseable {
         this::announceQuietly, 0, Config.DISCOVERY_REANNOUNCE_S, TimeUnit.SECONDS);
   }
 
-  /** Broadcast a {@link DiscoveryHello} to the configured broadcast address. */
+  /**
+   * Broadcast a {@link DiscoveryHello}. Sent to every live interface's own broadcast address
+   * <em>and</em> the configured fallback (the limited broadcast {@code 255.255.255.255} by
+   * default), so it leaves the real LAN interface even on a host crowded with VPN and virtual
+   * adapters where a single broadcast target would be sent out the wrong one.
+   */
   public void announce() throws IOException {
     DiscoveryHello hello =
         new DiscoveryHello(
@@ -112,13 +124,49 @@ public final class DiscoveryService implements AutoCloseable {
             System.currentTimeMillis(),
             advertisedHost,
             config.listenPort());
-    InetAddress dst = InetAddress.getByName(config.broadcastAddr());
-    send(hello, new InetSocketAddress(dst, config.discoveryPort()));
+    IOException last = null;
+    for (InetSocketAddress target : broadcastTargets()) {
+      try {
+        send(hello, target);
+      } catch (IOException e) {
+        last = e; // a dead virtual interface must not stop the others
+      }
+    }
     log.info(
         "event=group_view serverId={} size={} ids={}",
         config.serverId(),
         groupView.size(),
         groupView.ids());
+    if (last != null && groupView.size() == 1) {
+      throw last; // nothing got out and we are still alone; surface it to announceQuietly
+    }
+  }
+
+  /** The configured broadcast address plus each up, non-loopback interface's own broadcast. */
+  private List<InetSocketAddress> broadcastTargets() {
+    Set<InetSocketAddress> targets = new LinkedHashSet<>();
+    int port = config.discoveryPort();
+    try {
+      targets.add(new InetSocketAddress(InetAddress.getByName(config.broadcastAddr()), port));
+    } catch (IOException ignored) {
+      // a bad configured value must not stop interface-derived targets
+    }
+    try {
+      for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+        if (!nif.isUp() || nif.isLoopback()) {
+          continue;
+        }
+        for (InterfaceAddress ia : nif.getInterfaceAddresses()) {
+          InetAddress b = ia.getBroadcast();
+          if (b != null) {
+            targets.add(new InetSocketAddress(b, port));
+          }
+        }
+      }
+    } catch (SocketException ignored) {
+      // fall back to just the configured target
+    }
+    return new ArrayList<>(targets);
   }
 
   private void announceQuietly() {
@@ -239,10 +287,40 @@ public final class DiscoveryService implements AutoCloseable {
     if (configured != null && !configured.isBlank() && !configured.equals("0.0.0.0")) {
       return configured;
     }
-    try {
-      return InetAddress.getLocalHost().getHostAddress();
-    } catch (UnknownHostException e) {
-      return "127.0.0.1";
+    InetAddress lan = primaryLanAddress();
+    return lan != null ? lan.getHostAddress() : "127.0.0.1";
+  }
+
+  /** The host's primary LAN IPv4 (the interface that owns the default route), or {@code null}. */
+  private static InetAddress primaryLanAddress() {
+    // The kernel picks the default-route interface's source address; no packet is sent.
+    try (DatagramSocket probe = new DatagramSocket()) {
+      probe.connect(InetAddress.getByName("8.8.8.8"), 53);
+      InetAddress local = probe.getLocalAddress();
+      if (local instanceof Inet4Address
+          && !local.isAnyLocalAddress()
+          && !local.isLoopbackAddress()) {
+        return local;
+      }
+    } catch (IOException ignored) {
+      // fall through to interface enumeration
     }
+    try {
+      for (NetworkInterface nif : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+        if (!nif.isUp() || nif.isLoopback()) {
+          continue;
+        }
+        for (InetAddress addr : Collections.list(nif.getInetAddresses())) {
+          if (addr instanceof Inet4Address
+              && !addr.isLoopbackAddress()
+              && !addr.isLinkLocalAddress()) {
+            return addr;
+          }
+        }
+      }
+    } catch (SocketException ignored) {
+      // no usable interface
+    }
+    return null;
   }
 }

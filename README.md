@@ -134,17 +134,16 @@ make format            # auto-apply Google Java Format
 
 ## Run
 
-Every host runs the **same** fat-jar; behaviour is selected by a subcommand and
-configured purely through environment variables (no hardcoded hosts).
+The same fat-jar runs on every host; behaviour is picked by the subcommand. **No configuration is
+required**: the server detects its own LAN address and broadcast, picks a random id, and uses the
+default ports. The environment variables below are optional overrides.
 
 ```bash
-# Start a server (its id is generated randomly at startup)
-LISTEN_PORT=5003 DISCOVERY_PORT=5000 BROADCAST_ADDR=255.255.255.255 \
-  java -jar target/chatapp.jar server
+# Start a server (no arguments, no env vars needed)
+java -jar target/chatapp.jar server
 
 # Start a client
-DISCOVERY_PORT=5000 BROADCAST_ADDR=255.255.255.255 \
-  java -jar target/chatapp.jar client
+java -jar target/chatapp.jar client
 ```
 
 The demo runs on three physical hosts on a private LAN: a Raspberry Pi 4 plus two
@@ -153,15 +152,15 @@ leader is whichever server drew the highest id. No Docker, no VMs. Avoid eduroam
 which blocks UDP broadcast; use a phone hotspot or a home Wi-Fi router. A ready
 runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 
-### Configuration
+### Configuration (optional overrides)
 
 | Variable | Meaning | Default |
 |---|---|---|
 | `SERVER_ID` | Unique numeric server id. Generated randomly when unset; set it only when you want deterministic ids (several servers on one machine). | auto (random) |
-| `LISTEN_HOST` | Address the server binds | `0.0.0.0` |
-| `LISTEN_PORT` | TCP port for chat and state sync | none |
-| `DISCOVERY_PORT` | UDP port for discovery and heartbeats | none |
-| `BROADCAST_ADDR` | Subnet broadcast address for discovery | none |
+| `LISTEN_HOST` | Address the server binds; the advertised address is auto-detected from the LAN when this is `0.0.0.0` | `0.0.0.0` |
+| `LISTEN_PORT` | TCP port for chat and state sync | `6000` |
+| `DISCOVERY_PORT` | UDP port for discovery and heartbeats | `4500` |
+| `BROADCAST_ADDR` | Fallback broadcast target; the server also announces to every interface's own broadcast | `255.255.255.255` |
 
 ### Timing constants
 

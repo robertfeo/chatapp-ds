@@ -138,10 +138,11 @@ replicated servers and a single elected leader.
 ## 6. Conventions
 
 - Package layout: `com.chatapp.{server,client,protocol,discovery,election,heartbeat,config}`.
-- Configuration **only** via env vars (`LISTEN_HOST`, `LISTEN_PORT`,
-  `DISCOVERY_PORT`, `BROADCAST_ADDR`). Never hardcode `localhost`. The server id is
-  **generated randomly at startup**; `SERVER_ID` is only an optional override for
-  deterministic ids (dev runner, tests).
+- **Zero-config by default**: `java -jar chatapp.jar server` runs with no arguments and no env
+  vars. The server detects its own LAN address (advertised host) and broadcast targets, generates a
+  random id, and uses the default ports. Env vars (`LISTEN_HOST`, `LISTEN_PORT`, `DISCOVERY_PORT`,
+  `BROADCAST_ADDR`, `SERVER_ID`, `CLIENT_NAME`) are **optional overrides** only, used by the dev
+  runner and tests. Do not require any env var at run time, and never hardcode `localhost`.
 - Shared constants (for example `HEARTBEAT_INTERVAL_S`) live in
   `com.chatapp.config.Config`.
 - Structured logs: `key=value` pairs on every state change a viewer should see
