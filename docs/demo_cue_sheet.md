@@ -41,8 +41,8 @@ speaks when, what to type on stage, and exactly when to kill the leader. Pair it
 
 **Cue A - bring up the cluster (~1.5 min)**
 - Operator: start the server on each of the 3 hosts.
-  - Pi / Linux: `java -jar target/chatapp.jar server`
-  - Windows: `.\start_server.ps1`
+  - Pi / Linux: `./start.sh server`
+  - Windows: `.\start.bat server`
 - Narrator: "Each picks a random id and finds the others by UDP broadcast."
 - Watch for, and read out: `event=group_view ... size=3`, one `event=leader_elected myId=<idA>`,
   the others `event=leader_accepted leaderId=<idA>`.

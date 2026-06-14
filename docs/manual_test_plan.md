@@ -16,9 +16,9 @@ anyone on the team (not only the author) can run it.
 - Windows servers run on **native Windows, not WSL** (WSL2's NAT keeps broadcast off the LAN).
 - No configuration is needed: the server picks a **random id**, detects its LAN address, uses the
   default ports (discovery UDP **45678**, chat TCP **6000**). Start with the launchers or the jar:
-  - Linux/Pi: `java -jar target/chatapp.jar server` (or `bash scripts/start_server.sh`)
-  - Windows: `.\start_server.ps1` from the run folder (or `java -jar chatapp.jar server`)
-  - Client: `... server` -> `... client`
+  - Linux/Pi: `./start.sh server` (or `java -jar chatapp.jar server`)
+  - Windows: `.\start.bat server` (or `java -jar chatapp.jar server`)
+  - Client: same launcher with `client` instead of `server`
 - See `docs/demo_runbook.md` for the full bring-up and troubleshooting.
 
 > Ids are random integers, so they differ on every run. In the expected-log snippets below they are

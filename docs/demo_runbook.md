@@ -27,23 +27,29 @@ can differ on each cold start.
 - **Do not run the server in WSL.** WSL2 is behind a virtual NAT; its UDP broadcast never reaches
   the LAN. Build in WSL, but run the jar from native Windows.
 
-## 1. Build and copy the jar
+## 1. Get the launcher onto each host
 
-On your dev machine (this repo):
+Each host runs a single launcher that downloads `chatapp.jar` from the
+[v1.0.0 release](https://github.com/robertfeo/chatapp-ds/releases/tag/v1.0.0) on
+first run, so there is nothing to build or copy by hand.
 
-```bash
-mvn -q -DskipTests package      # produces target/chatapp.jar (one fat-jar, runs everywhere)
-```
-
-Copy `target/chatapp.jar` (and the matching `scripts/`) to each host:
+**Pi / Linux** (SSH in):
 
 ```bash
-# to the Pi (replace with the Pi's user@ip):
-scp target/chatapp.jar scripts/start_server.sh scripts/start_client.sh pi@<PI_IP>:~/chatapp/
+mkdir -p ~/chatapp && cd ~/chatapp
+curl -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.sh
+chmod +x start.sh
 ```
 
-For the Windows machines: copy `chatapp.jar` and `scripts\start_server.ps1` / `scripts\start_client.ps1`
-into a folder, e.g. `C:\chatapp\`. From WSL: `cp target/chatapp.jar /mnt/c/chatapp/`.
+**Windows machines** (PowerShell), into e.g. `C:\chatapp\`:
+
+```powershell
+mkdir C:\chatapp -Force; cd C:\chatapp
+curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.bat
+```
+
+If you would rather build from source, run `mvn -q -DskipTests package` and drop
+`target/chatapp.jar` next to the launcher; it then skips the download.
 
 ## 2. Sanity-check the IPs
 
@@ -62,19 +68,18 @@ broadcast is `192.168.1.255`. The server ids are independent of the IPs (they ar
 
 ```bash
 cd ~/chatapp
-./start_server.sh
+./start.sh server
 ```
 
 **Your laptop** - native Windows PowerShell in `C:\chatapp`:
 
 ```powershell
-.\start_server.ps1
+.\start.bat server
 ```
 
-If PowerShell refuses the script ("not digitally signed"), either allow local scripts once with
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned; Get-ChildItem .\scripts\*.ps1 | Unblock-File`,
-or skip the script entirely and run the jar directly: `java -jar chatapp.jar server` (the server
-needs no arguments or env vars).
+The `.bat` launcher runs with no PowerShell execution-policy change. To skip it and
+run the jar directly instead: `java -jar chatapp.jar server` (no arguments or env
+vars needed).
 
 The first time, Windows Defender Firewall pops up "Allow Java to communicate" - tick **Private
 networks** and **Allow access**. (Manual fallback, admin PowerShell:
@@ -109,13 +114,13 @@ No configuration here either; the client discovers the leader and uses this host
 **Third device (Windows), client:**
 
 ```powershell
-.\start_client.ps1
+.\start.bat client
 ```
 
 **A second client on your laptop** (so two clients can chat), a new PowerShell window:
 
 ```powershell
-.\start_client.ps1
+.\start.bat client
 ```
 
 Each client should print `Connected to leader=<id>`. Type a line in one client; it appears in the
