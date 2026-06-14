@@ -138,8 +138,10 @@ replicated servers and a single elected leader.
 ## 6. Conventions
 
 - Package layout: `com.chatapp.{server,client,protocol,discovery,election,heartbeat,config}`.
-- Configuration **only** via env vars (`SERVER_ID`, `LISTEN_HOST`,
-  `LISTEN_PORT`, `DISCOVERY_PORT`, `BROADCAST_ADDR`). Never hardcode `localhost`.
+- Configuration **only** via env vars (`LISTEN_HOST`, `LISTEN_PORT`,
+  `DISCOVERY_PORT`, `BROADCAST_ADDR`). Never hardcode `localhost`. The server id is
+  **derived automatically from the host's LAN IP** (last octet); `SERVER_ID` is only an
+  optional override for running several servers on one machine (dev runner, tests).
 - Shared constants (for example `HEARTBEAT_INTERVAL_S`) live in
   `com.chatapp.config.Config`.
 - Structured logs: `key=value` pairs on every state change a viewer should see
