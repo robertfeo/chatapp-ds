@@ -15,8 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies that {@link ElectionService#onLeaderAnnounced} correctly updates all replicas so every
- * alive server converges on the same {@code leader_id} (Issue #11 acceptance criterion 1).
+ * Verifies that {@link ElectionService#onCoordinator} correctly updates all replicas so every alive
+ * server converges on the same {@code leader_id} (Issue #11 acceptance criterion 1).
  */
 class LeaderAnnouncementTest {
 
@@ -36,10 +36,10 @@ class LeaderAnnouncementTest {
   }
 
   @Test
-  void onLeaderAnnouncedSetsLeaderId() {
+  void onCoordinatorSetsLeaderId() {
     ElectionService service = new ElectionService(CONFIG, groupView, (m, a) -> {}, leaderId);
 
-    service.onLeaderAnnounced(iAmLeader(2, 2));
+    service.onCoordinator(iAmLeader(2, 2));
 
     assertEquals(2, leaderId.get());
   }
@@ -61,9 +61,9 @@ class LeaderAnnouncementTest {
 
     // Server 3 won the election and announces itself.
     IAmLeader announcement = iAmLeader(3, 3);
-    s1.onLeaderAnnounced(announcement);
-    s2.onLeaderAnnounced(announcement);
-    s3.onLeaderAnnounced(announcement);
+    s1.onCoordinator(announcement);
+    s2.onCoordinator(announcement);
+    s3.onCoordinator(announcement);
 
     assertEquals(3, leaderId1.get(), "server 1 must converge on leader=3");
     assertEquals(3, leaderId2.get(), "server 2 must converge on leader=3");
@@ -71,15 +71,15 @@ class LeaderAnnouncementTest {
   }
 
   @Test
-  void onLeaderAnnouncedStopsRunningElection() {
+  void onCoordinatorStopsRunningElection() {
     // Trigger an election, then announce a winner before the voting window closes.
     List<Object> sent = new ArrayList<>();
     ElectionService service =
         new ElectionService(CONFIG, groupView, (m, a) -> sent.add(m), leaderId);
 
-    service.triggerElection();
+    service.startElection();
     // Election is now running; immediately announce a winner from outside.
-    service.onLeaderAnnounced(iAmLeader(2, 2));
+    service.onCoordinator(iAmLeader(2, 2));
 
     // The service must have accepted the leader even while an election was running.
     assertEquals(2, leaderId.get());
@@ -91,7 +91,7 @@ class LeaderAnnouncementTest {
     ElectionService service =
         new ElectionService(CONFIG, groupView, (m, a) -> {}, leaderId, notified::add);
 
-    service.onLeaderAnnounced(iAmLeader(2, 2));
+    service.onCoordinator(iAmLeader(2, 2));
 
     assertFalse(notified.isEmpty(), "onLeaderChanged callback must be called");
     assertEquals(2, notified.get(0));

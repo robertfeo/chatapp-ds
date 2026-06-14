@@ -160,7 +160,12 @@ public final class DiscoveryService implements AutoCloseable {
     switch (message) {
       case DiscoveryHello hello -> onHello(hello, packet);
       case DiscoveryReply reply -> onReply(reply, packet);
-      default -> extraHandler.accept(message);
+      default -> {
+        // Votes and leader announcements are broadcast, so our own come back to us; drop them.
+        if (message.senderId() != config.serverId()) {
+          extraHandler.accept(message);
+        }
+      }
     }
   }
 

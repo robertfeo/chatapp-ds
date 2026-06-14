@@ -5,11 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.chatapp.protocol.Message.Answer;
 import com.chatapp.protocol.Message.Chat;
 import com.chatapp.protocol.Message.ChatEntry;
 import com.chatapp.protocol.Message.DiscoveryHello;
 import com.chatapp.protocol.Message.DiscoveryReply;
-import com.chatapp.protocol.Message.ElectionVote;
+import com.chatapp.protocol.Message.ElectionInquiry;
 import com.chatapp.protocol.Message.Heartbeat;
 import com.chatapp.protocol.Message.HistoryRequest;
 import com.chatapp.protocol.Message.HistorySnapshot;
@@ -32,7 +33,8 @@ class CodecTest {
         new DiscoveryReply(2, SenderRole.SERVER, 1001L, "192.168.0.2", 5002, 3),
         new DiscoveryReply(2, SenderRole.SERVER, 1001L, "192.168.0.2", 5002, null),
         new Heartbeat(3, SenderRole.SERVER, 1002L),
-        new ElectionVote(1, SenderRole.SERVER, 1003L, 1),
+        new ElectionInquiry(1, SenderRole.SERVER, 1003L),
+        new Answer(2, SenderRole.SERVER, 1003L),
         new IAmLeader(3, SenderRole.SERVER, 1004L, 3),
         new Chat(7, SenderRole.CLIENT, 1005L, "ayham", "hello there"),
         new StateSync(

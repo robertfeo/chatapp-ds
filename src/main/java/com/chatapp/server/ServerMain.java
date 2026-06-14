@@ -85,8 +85,9 @@ public final class ServerMain {
             msg -> {
               switch (msg) {
                 case Message.Heartbeat hb -> heartbeatRef.get().onHeartbeatReceived(hb);
-                case Message.ElectionVote v -> electionRef.get().onVoteReceived(v);
-                case Message.IAmLeader leader -> electionRef.get().onLeaderAnnounced(leader);
+                case Message.ElectionInquiry e -> electionRef.get().onElectionInquiry(e);
+                case Message.Answer a -> electionRef.get().onAnswer(a);
+                case Message.IAmLeader leader -> electionRef.get().onCoordinator(leader);
                 default -> {}
               }
             });
@@ -160,7 +161,7 @@ public final class ServerMain {
             discovery::send,
             deadPeerId -> {
               if (deadPeerId == currentLeaderId.get()) {
-                election.triggerElection();
+                election.startElection();
               }
             });
 
@@ -192,6 +193,10 @@ public final class ServerMain {
     }
 
     heartbeat.start();
+
+    // No prior leader exists on a cold start, so kick off a one-shot election once the group view
+    // has had time to converge; the highest live id becomes the initial leader.
+    election.scheduleBootstrap();
 
     Runtime.getRuntime()
         .addShutdownHook(

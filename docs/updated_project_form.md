@@ -39,17 +39,17 @@ Dynamic discovery uses **UDP broadcast** on the local subnet. There is no centra
 
 ## Voting (Leader Election)
 
-Leader election uses a **Highest-ID-Wins** algorithm, not LCR.
+Leader election uses the **Bully algorithm** (Garcia-Molina, 1982), the crash-fault-tolerant Highest-ID-Wins scheme from the lecture. Not LCR and not a ring: the servers form a small group that already knows each other's ids through discovery.
 
 - Each server has a unique numeric `SERVER_ID`.
 - Each server tracks heartbeats from its peers. If the leader's heartbeat is missing for more than the timeout (6 s), the server starts an election.
-- Election round:
-  1. The server broadcasts an `ELECTION_VOTE` carrying its own id.
-  2. It collects votes for a short window (2 s).
-  3. The highest id seen (including its own) wins.
-  4. The winner broadcasts `I_AM_LEADER` to all servers and clients.
-- Non-winners update their local `leader_id` and continue as replicas.
-- The algorithm is deterministic: the same set of alive ids always produces the same leader.
+- Three message types (Bully): `ELECTION` (a candidate calls an election), `ANSWER` (a higher-id server replies "I am alive" to suppress a lower candidate and take over), and `I_AM_LEADER` (the winning coordinator announces itself).
+- Election round for a server P:
+  1. P sends an `ELECTION` inquiry. Any live server with a higher id replies with `ANSWER` and starts its own election.
+  2. If no higher-id server answers within 2 s, P wins and broadcasts `I_AM_LEADER` to all servers and clients.
+  3. If a higher-id server answered, P stands down and waits for that server's `I_AM_LEADER`; if none arrives in time, P restarts the election.
+  4. If P ever receives an `I_AM_LEADER` from a lower id, it "bullies" it out by starting a new election.
+- The highest live id always wins, so the outcome is deterministic for a given set of alive servers, and a crashed leader is automatically replaced by the next-highest survivor.
 
 ## Fault Tolerance
 
