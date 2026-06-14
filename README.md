@@ -158,6 +158,21 @@ leader is whichever server drew the highest id. No Docker, no VMs. Avoid eduroam
 which blocks UDP broadcast; use a phone hotspot or a home Wi-Fi router. A ready
 runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 
+### Live server dashboard
+
+On an interactive terminal, each server renders a **live dashboard** instead of scrolling logs: a
+single panel that refreshes a few times a second with the server's role (leader or replica), the
+current leader, the live peer set, the number of connected clients and replicas, the chat-history
+size, the listening ports, and a feed of the most recent events (elections, joins, chats,
+failover). Press `q` or `Ctrl+C` to stop the server (handy for the failover demo). The full
+structured logs are still written to `logs/server-<id>.log`.
+
+It is built on [JLine](https://github.com/jline/jline3), which drives the console natively on the
+Windows laptops and the Raspberry Pi over SSH alike (the platform libraries ship inside the
+fat-jar, nothing to install). When output is **not** a terminal (a pipe, CI, or the dev runner),
+the server prints the same plain `event=...` logs to stdout as before, so scripts and tests are
+unaffected; set `CHATAPP_DASHBOARD=off` to force plain logs on a terminal too.
+
 ### Configuration (optional overrides)
 
 | Variable | Meaning | Default |
@@ -167,6 +182,7 @@ runbook lives in [`docs/demo_runbook.md`](docs/demo_runbook.md).
 | `LISTEN_PORT` | TCP port for chat and state sync | `6000` |
 | `DISCOVERY_PORT` | UDP port for discovery and heartbeats (not 4500: that is Windows' IPsec NAT-T port) | `45678` |
 | `BROADCAST_ADDR` | Fallback broadcast target; the server also announces to every interface's own broadcast | `255.255.255.255` |
+| `CHATAPP_DASHBOARD` | Set to `off` (or `plain`) to disable the live dashboard and use plain `event=...` logs even on a terminal | auto (on when interactive) |
 
 ### Timing constants
 

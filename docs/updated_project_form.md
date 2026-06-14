@@ -72,9 +72,10 @@ The system handles crash failures of clients and servers.
 | Concurrency | `java.util.concurrent`, virtual threads (per-client server handlers) |
 | Serialization | Jackson (JSON wire envelopes) |
 | Logging | SLF4J API + Logback |
+| Terminal UI | JLine (live per-server dashboard) |
 | Tests | JUnit 5 |
 
-No middleware (no ZooKeeper, no Akka, no Spring). The above libraries are pure utility — they do not provide coordination, leader election, or replication primitives.
+No middleware (no ZooKeeper, no Akka, no Spring). The above libraries are pure utility — they handle JSON, logging, and the terminal dashboard, and do not provide coordination, leader election, or replication primitives.
 
 ## Constants
 

@@ -10,7 +10,9 @@ speaks when, what to type on stage, and exactly when to kill the leader. Pair it
 - Servers run on **native Windows / the Pi**, never WSL.
 - Jar copied to each host; `java -version` shows 21 everywhere.
 - One quick rehearsal of the bring-up so the first `group_view size=3` is fast.
-- Terminal font large; logs visible to the room; filter to `event=` lines if possible.
+- Terminal font large; each server's **live dashboard** (role, leader, peers, clients, history, and
+  the event feed) is visible to the room. The `event=` lines called out below appear in the panel's
+  feed; the full log is also in `logs/server-<id>.log`.
 
 ## Roles
 
