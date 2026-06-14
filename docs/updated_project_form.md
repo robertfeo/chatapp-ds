@@ -144,4 +144,4 @@ flowchart LR
 
 ## Deployment
 
-The demo runs on three physical hosts on a private LAN: Robert's Raspberry Pi 4 (8 GB RAM, aarch64) as the default leader (highest numeric ID), plus two student laptops as replica servers and clients. All hosts run the same shaded fat-jar built from `mvn package`, configured purely via environment variables.
+The demo runs on three physical hosts on a private LAN: Robert's Raspberry Pi 4 (8 GB RAM, aarch64) plus two student laptops, each running a server and one or more clients. All hosts run the same shaded fat-jar built from `mvn package` and start with **no configuration**: `java -jar chatapp.jar server` detects the host's own LAN address, picks a random numeric id, and uses the default ports (UDP 45678 for discovery/heartbeats, TCP 6000 for chat). The host that draws the highest id becomes the leader; environment variables exist only as optional overrides (used by the local dev runner and the tests). The UDP discovery port is deliberately not 4500, which on Windows is the IPsec NAT-T port and would swallow inbound discovery datagrams.
