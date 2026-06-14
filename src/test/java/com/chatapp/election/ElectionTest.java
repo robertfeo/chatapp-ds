@@ -3,7 +3,6 @@ package com.chatapp.election;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.NoSuchElementException;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,7 +27,7 @@ class ElectionTest {
 
   @Test
   void emptySetThrows() {
-    assertThrows(NoSuchElementException.class, () -> Election.pickLeader(Set.of()));
+    assertThrows(IllegalStateException.class, () -> Election.pickLeader(Set.of()));
   }
 
   @Test
