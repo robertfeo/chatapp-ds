@@ -1,4 +1,4 @@
-# chatapp-ds
+# Chat Application - Distributed Systems (VL)
 
 [![CI](https://github.com/robertfeo/chatapp-ds/actions/workflows/ci.yml/badge.svg)](https://github.com/robertfeo/chatapp-ds/actions/workflows/ci.yml)
 [![Java 21](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)](https://adoptium.net/)
