@@ -91,35 +91,35 @@ Components: 3 server processes (one acting as leader, two as replicas) and N cli
 
 ```mermaid
 flowchart LR
-    subgraph SERVERS["Server cluster (3 hosts)"]
-        L["Server A — Leader<br/>(highest ID)"]
-        R1["Server B — Replica"]
-        R2["Server C — Replica"]
+    subgraph SERVERS["Server cluster (3 hosts, random numeric ids)"]
+        L["Server &mdash; LEADER<br/>(highest id; Bully election)"]
+        R1["Server &mdash; Replica"]
+        R2["Server &mdash; Replica"]
     end
 
     subgraph CLIENTS["Clients (N)"]
-        C1["Client 1"]
-        C2["Client 2"]
-        Cn["Client N"]
+        C1["Client"]
+        C2["Client"]
+        Cn["Client ..."]
     end
 
-    BC(("UDP broadcast<br/>(discovery)"))
+    BC(("UDP broadcast :45678<br/>discovery + election"))
 
-    %% Chat fan-out: clients <-> leader over TCP
-    C1 <-->|TCP chat| L
-    C2 <-->|TCP chat| L
-    Cn <-->|TCP chat| L
+    %% Chat: clients <-> leader over TCP (request in, fan-out back on the same socket)
+    C1 <-->|"TCP chat :6000"| L
+    C2 <-->|"TCP chat :6000"| L
+    Cn <-->|"TCP chat :6000"| L
 
-    %% State replication: leader -> replicas over TCP
-    L -->|TCP state sync| R1
-    L -->|TCP state sync| R2
+    %% State replication: leader -> replicas over TCP (history deltas + snapshot on join)
+    L -->|"TCP state sync"| R1
+    L -->|"TCP state sync"| R2
 
-    %% Heartbeats every 2s, UDP, pairwise between servers
-    L <-.->|UDP heartbeat 2s| R1
-    L <-.->|UDP heartbeat 2s| R2
-    R1 <-.->|UDP heartbeat 2s| R2
+    %% Heartbeats: UDP unicast between servers, every 2s, peer dead after 6s
+    L <-.->|"UDP heartbeat 2s"| R1
+    L <-.->|"UDP heartbeat 2s"| R2
+    R1 <-.->|"UDP heartbeat 2s"| R2
 
-    %% Discovery: every participant uses the broadcast address
+    %% Discovery + election: every participant uses the UDP broadcast address
     L -.-> BC
     R1 -.-> BC
     R2 -.-> BC
