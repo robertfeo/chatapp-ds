@@ -23,14 +23,23 @@ Two launchers live at the repository root and are attached to each release:
 - `start.bat` for Windows
 
 Each one verifies that Java 21+ is present (it understands both the modern
-`21.x` and the legacy `1.x` version strings), downloads `chatapp.jar` next to
-itself on the first run, and then launches it. Pass `server` or `client` as the
-argument:
+`21.x` and the legacy `1.x` version strings) and then finds a runnable jar on
+its own, in this order:
+
+1. `target/chatapp.jar`, when the project was already built from source;
+2. `chatapp.jar` next to the launcher, when an earlier run downloaded it;
+3. build from source (`mvn -DskipTests package`), when the launcher sits in a
+   source checkout and Maven is installed;
+4. download the latest released `chatapp.jar` next to itself.
+
+So in a cloned repository `./start.sh server` is all you ever type, and on a
+bare host the same command downloads the release jar first. Pass `server` or
+`client` as the argument:
 
 **Linux, macOS, Raspberry Pi:**
 
 ```bash
-curl -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.sh
+curl -fLO https://github.com/robertfeo/chatapp-ds/releases/latest/download/start.sh
 chmod +x start.sh
 ./start.sh server      # start a server
 ./start.sh client      # start a client
@@ -39,13 +48,13 @@ chmod +x start.sh
 **Windows (PowerShell or cmd):**
 
 ```bat
-curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.bat
+curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/latest/download/start.bat
 .\start.bat server
 .\start.bat client
 ```
 
-The jar is cached next to the launcher after the first download, so later runs
-start immediately. To force a fresh download (for example after a new release),
+The jar is cached after the first download or build, so later runs start
+immediately. To force a fresh download (for example after a new release),
 delete `chatapp.jar` and run the launcher again.
 
 ## Option B: run the jar directly
@@ -69,6 +78,10 @@ mvn package       # build the shaded fat-jar at target/chatapp.jar
 java -jar target/chatapp.jar server
 ```
 
+With `make`, the same things are one word each: `make package`, `make test`,
+and `make server` / `make client` (which build the jar first when it is
+missing and then run that role in the foreground).
+
 ## The live dashboard
 
 On an interactive terminal each **server** shows a live panel instead of
@@ -81,8 +94,8 @@ same on every server (a replica mirrors the leader's counts).
 - Press **`q`** or **`Ctrl+C`** to stop the server (this is how you trigger the
   failover demo).
 - The full structured log is still written to `logs/server-<id>.log`.
-- When output is not a terminal (a pipe, CI, or the dev runner) the server
-  prints the plain `event=...` logs to stdout instead, unchanged.
+- When output is not a terminal (a pipe or CI) the server prints the plain
+  `event=...` logs to stdout instead, unchanged.
 - Set `CHATAPP_DASHBOARD=off` to force plain logs on a terminal too.
 
 A **client** is a line-based chat: type a message and press Enter; it appears on

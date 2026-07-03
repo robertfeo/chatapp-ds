@@ -24,15 +24,17 @@ Sommersemester 2026.
 
 ## Quickstart
 
-The fastest way to run a server or a client: grab the launcher for your OS. It
-checks that **Java 21+** is installed, downloads the released `chatapp.jar` next
-to itself on first run, and starts it. A Java 21 runtime is the only
-prerequisite.
+One command starts everything: `./start.sh server` or `./start.sh client`
+(`start.bat` on Windows). The launcher checks that **Java 21+** is installed and
+finds the jar on its own: it uses `target/chatapp.jar` when you have built the
+project, builds it from source when you are in a checkout with Maven, and
+otherwise downloads the latest released `chatapp.jar` next to itself. A Java 21
+runtime is the only prerequisite.
 
-**Linux, macOS, Raspberry Pi:**
+**Linux, macOS, Raspberry Pi** (in a clone, or with just the launcher):
 
 ```bash
-curl -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.sh
+curl -fLO https://github.com/robertfeo/chatapp-ds/releases/latest/download/start.sh
 chmod +x start.sh
 ./start.sh server      # or: ./start.sh client
 ```
@@ -40,7 +42,7 @@ chmod +x start.sh
 **Windows (PowerShell or cmd):**
 
 ```bat
-curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.bat
+curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/latest/download/start.bat
 .\start.bat server     :: or: .\start.bat client
 ```
 
@@ -166,6 +168,8 @@ make package           # build target/chatapp.jar
 make test              # unit tests
 make lint              # Spotless format check
 make format            # auto-apply Google Java Format
+make server            # run a server (builds the jar first if missing)
+make client            # run a client (builds the jar first if missing)
 ```
 
 ## Run
@@ -176,10 +180,10 @@ default ports. The environment variables below are optional overrides.
 
 ```bash
 # Start a server (no arguments, no env vars needed)
-java -jar target/chatapp.jar server
+./start.sh server      # or: make server, or: java -jar target/chatapp.jar server
 
 # Start a client
-java -jar target/chatapp.jar client
+./start.sh client      # or: make client, or: java -jar target/chatapp.jar client
 ```
 
 The demo runs on three physical hosts on a private LAN: a Raspberry Pi 4 plus two
@@ -199,7 +203,7 @@ structured logs are still written to `logs/server-<id>.log`.
 
 It is built on [JLine](https://github.com/jline/jline3), which drives the console natively on the
 Windows laptops and the Raspberry Pi over SSH alike (the platform libraries ship inside the
-fat-jar, nothing to install). When output is **not** a terminal (a pipe, CI, or the dev runner),
+fat-jar, nothing to install). When output is **not** a terminal (a pipe or CI),
 the server prints the same plain `event=...` logs to stdout as before, so scripts and tests are
 unaffected; set `CHATAPP_DASHBOARD=off` to force plain logs on a terminal too.
 

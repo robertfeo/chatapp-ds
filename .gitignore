@@ -40,3 +40,6 @@ CLAUDE.md
 .aider*
 .continue/
 .codeium/
+
+.knowledge/
+.knowledge/*

@@ -1,7 +1,7 @@
 # chatapp-ds developer entry points. Thin wrappers around Maven so every team
 # member runs the same commands regardless of IDE.
 
-.PHONY: install lint format test package dev stop status
+.PHONY: install lint format test package server client
 
 # Build and install to the local repo without running tests.
 install:
@@ -23,15 +23,13 @@ test:
 package:
 	mvn package
 
-# Spin up 3 servers + 2 clients on localhost (background JVMs, logs in target/dev/).
-# Override counts/ports with env vars, e.g. SERVERS=3 CLIENTS=2 make dev.
-dev:
-	@bash scripts/dev.sh up
+# Run a server / a client in the foreground. Builds the jar first if it is
+# missing; after changing sources, run 'make package' to rebuild it.
+server: target/chatapp.jar
+	java -jar target/chatapp.jar server
 
-# Tear down everything started by 'make dev', leaving no orphan processes.
-stop:
-	@bash scripts/dev.sh down
+client: target/chatapp.jar
+	java -jar target/chatapp.jar client
 
-# Show which dev processes are alive.
-status:
-	@bash scripts/dev.sh status
+target/chatapp.jar:
+	mvn -DskipTests package

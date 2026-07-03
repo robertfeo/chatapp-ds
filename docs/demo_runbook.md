@@ -30,14 +30,14 @@ can differ on each cold start.
 ## 1. Get the launcher onto each host
 
 Each host runs a single launcher that downloads `chatapp.jar` from the
-[v1.0.0 release](https://github.com/robertfeo/chatapp-ds/releases/tag/v1.0.0) on
+[latest release](https://github.com/robertfeo/chatapp-ds/releases/latest) on
 first run, so there is nothing to build or copy by hand.
 
 **Pi / Linux** (SSH in):
 
 ```bash
 mkdir -p ~/chatapp && cd ~/chatapp
-curl -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.sh
+curl -fLO https://github.com/robertfeo/chatapp-ds/releases/latest/download/start.sh
 chmod +x start.sh
 ```
 
@@ -45,11 +45,12 @@ chmod +x start.sh
 
 ```powershell
 mkdir C:\chatapp -Force; cd C:\chatapp
-curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/start.bat
+curl.exe -fLO https://github.com/robertfeo/chatapp-ds/releases/latest/download/start.bat
 ```
 
-If you would rather build from source, run `mvn -q -DskipTests package` and drop
-`target/chatapp.jar` next to the launcher; it then skips the download.
+If you would rather build from source, clone the repository and run
+`./start.sh server` from the checkout: the launcher builds `target/chatapp.jar`
+itself when Maven is installed, or uses it directly when it already exists.
 
 ## 2. Sanity-check the IPs
 

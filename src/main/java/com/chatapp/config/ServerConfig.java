@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
  *   <li>{@code SERVER_ID} (optional): unique numeric id; the highest live id becomes leader. When
  *       not set it is <b>generated randomly</b> at startup, so it never has to be assigned by hand
  *       and is not tied to the host's address. Set it explicitly only when you want deterministic
- *       ids (the localhost dev runner and the tests do this).
+ *       ids (the tests do this).
  *   <li>{@code LISTEN_HOST} (default {@value Config#DEFAULT_LISTEN_HOST}): TCP bind address.
  *   <li>{@code LISTEN_PORT} (default {@value Config#DEFAULT_LISTEN_PORT}): TCP chat/state-sync
  *       port.

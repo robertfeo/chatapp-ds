@@ -1,10 +1,28 @@
 #!/usr/bin/env bash
+#
+# One-command launcher: ./start.sh server | ./start.sh client
+#
+# Finds a runnable jar in this order:
+#   1. target/chatapp.jar   (a source checkout that was already built)
+#   2. ./chatapp.jar        (downloaded next to this script on an earlier run)
+#   3. build from source    (source checkout + Maven available)
+#   4. download the latest release jar
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-URL="https://github.com/robertfeo/chatapp-ds/releases/download/v1.0.0/chatapp.jar"
-JAR="chatapp.jar"
+URL="https://github.com/robertfeo/chatapp-ds/releases/latest/download/chatapp.jar"
+
+usage() {
+    echo "usage: $0 <server|client>" >&2
+    exit 2
+}
+
+[ $# -ge 1 ] || usage
+case "$1" in
+    server|client) ;;
+    *) usage ;;
+esac
 
 if ! command -v java >/dev/null 2>&1; then
     echo "Error: Java is not installed or not on PATH." >&2
@@ -25,13 +43,22 @@ if [ -z "$MAJOR" ] || ! [ "$MAJOR" -ge 21 ] 2>/dev/null; then
     exit 1
 fi
 
-if [ ! -f "$JAR" ]; then
-    echo "Downloading $JAR..."
+if [ -f "target/chatapp.jar" ]; then
+    JAR="target/chatapp.jar"
+elif [ -f "chatapp.jar" ]; then
+    JAR="chatapp.jar"
+elif [ -f "pom.xml" ] && command -v mvn >/dev/null 2>&1; then
+    echo "Building chatapp.jar from source (mvn -DskipTests package)..."
+    mvn -q -DskipTests package
+    JAR="target/chatapp.jar"
+else
+    echo "Downloading chatapp.jar..."
     if command -v curl >/dev/null 2>&1; then
-        curl -fL -o "$JAR" "$URL"
+        curl -fL -o "chatapp.jar" "$URL"
     else
-        wget -O "$JAR" "$URL"
+        wget -O "chatapp.jar" "$URL"
     fi
+    JAR="chatapp.jar"
 fi
 
-java -jar "$JAR" "$@"
+exec java -jar "$JAR" "$@"
